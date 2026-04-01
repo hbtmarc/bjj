@@ -9,11 +9,6 @@ import {
   update,
   onValue,
   serverTimestamp,
-  storage,
-  storageRef,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
   initAnalyticsIfEnabled,
 } from "./firebase.js";
 import { apostilaItems, apostilaSections } from "./apostila-data.js";
@@ -29,6 +24,61 @@ import {
 } from "./ui.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const CLOUDINARY_CLOUD_NAME = "dhbybowgp";
+const CLOUDINARY_UPLOAD_PRESET = "avatar_perfil_unsigned";
+
+function uploadAvatarToCloudinary(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("Arquivo inválido para upload."));
+      return;
+    }
+
+    const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+    formData.append("folder", "avatars_bjj");
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint, true);
+    xhr.responseType = "json";
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || typeof onProgress !== "function") {
+        return;
+      }
+
+      const pct = Math.round((event.loaded / event.total) * 100);
+      onProgress(Math.max(0, Math.min(100, pct)));
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("Falha de rede durante o upload da imagem."));
+    };
+
+    xhr.onload = () => {
+      const response = xhr.response || {};
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const cloudinaryMessage = response?.error?.message;
+        reject(new Error(cloudinaryMessage || "Cloudinary retornou erro no upload."));
+        return;
+      }
+
+      const avatarUrl = String(response.secure_url || response.url || "").trim();
+      const avatarPublicId = String(response.public_id || "").trim();
+
+      if (!avatarUrl || !avatarPublicId) {
+        reject(new Error("Resposta do Cloudinary incompleta."));
+        return;
+      }
+
+      resolve({ avatarUrl, avatarPublicId });
+    };
+
+    xhr.send(formData);
+  });
+}
 
 const state = {
   user: null,
@@ -335,6 +385,8 @@ async function ensureDefaultPerfil(user) {
     proximaMetaGraduacao: "",
     observacoesDeEvolucao: "",
     objetivo: "",
+    avatarUrl: "",
+    avatarPublicId: "",
     reduzirAnimacoes: false,
     resumoPublico: false,
     createdAt: serverTimestamp(),
@@ -775,42 +827,28 @@ function renderRoute(route, user) {
         await logoutUser();
       },
       onAvatarUpload: async (file, onProgress) => {
-        if (!state.user || !file) return;
+        if (!state.user || !file) return "";
         const uid = state.user.uid;
-        const avatarRef = storageRef(storage, `avatars/${uid}/profile.jpg`);
-        const uploadTask = uploadBytesResumable(avatarRef, file, { contentType: file.type || "image/jpeg" });
-        const unsubscribe = uploadTask.on("state_changed", (snapshot) => {
-          if (typeof onProgress === "function") {
-            const pct = snapshot.totalBytes
-              ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-              : 0;
-            onProgress(pct);
-          }
-        });
-
-        try {
-          await uploadTask;
-        } finally {
-          unsubscribe();
-        }
-
-        const url = await getDownloadURL(uploadTask.snapshot.ref);
+        const { avatarUrl, avatarPublicId } = await uploadAvatarToCloudinary(file, onProgress);
         const perfilRef = ref(db, `users/${uid}/perfil`);
-        await update(perfilRef, { avatarUrl: url, updatedAt: serverTimestamp(), updatedAtMs: Date.now() });
-        return url;
+        await update(perfilRef, {
+          avatarUrl,
+          avatarPublicId,
+          updatedAt: serverTimestamp(),
+          updatedAtMs: Date.now(),
+        });
+        return avatarUrl;
       },
       onAvatarRemove: async () => {
         if (!state.user) return;
         const uid = state.user.uid;
-        const perfil = state.data.perfil || {};
-        if (perfil.avatarUrl) {
-          try {
-            const oldRef = storageRef(storage, `avatars/${uid}/profile.jpg`);
-            await deleteObject(oldRef);
-          } catch { /* file may not exist, ignore */ }
-        }
         const perfilRef = ref(db, `users/${uid}/perfil`);
-        await update(perfilRef, { avatarUrl: "", updatedAt: serverTimestamp(), updatedAtMs: Date.now() });
+        await update(perfilRef, {
+          avatarUrl: "",
+          avatarPublicId: "",
+          updatedAt: serverTimestamp(),
+          updatedAtMs: Date.now(),
+        });
       },
       onAddGrad: saveGraduacaoHistorico,
       onDeleteGrad: deleteGraduacaoHistorico,

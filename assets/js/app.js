@@ -126,7 +126,96 @@ const state = {
 };
 
 const view = document.querySelector("#app-view");
-const logoutButton = document.querySelector("#btn-logout");
+let isRouterStarted = false;
+let rerenderScheduled = false;
+
+function renderSessionBooting() {
+  if (!view) {
+    return;
+  }
+
+  view.innerHTML = `
+    <section class="card">
+      <h2 class="page-title">Carregando sessão</h2>
+      <p class="page-subtitle">Restaurando seu acesso...</p>
+    </section>
+  `;
+}
+
+function ensureRouterReady() {
+  if (!isRouterStarted) {
+    router.start();
+    isRouterStarted = true;
+    return;
+  }
+
+  router.refresh();
+}
+
+function setupTopUserMenu() {
+  const userMenuWrap = document.querySelector("#top-user-menu");
+  const userTrigger = document.querySelector("#btn-user-menu");
+  const userDropdown = document.querySelector("#top-user-dropdown");
+  const logoutMenuButton = document.querySelector("#btn-logout-menu");
+  const userAvatarImg = document.querySelector("#top-user-avatar-img");
+  const userAvatarInitials = document.querySelector("#top-user-avatar-initials");
+
+  if (!userMenuWrap || !userTrigger || !userDropdown) {
+    return;
+  }
+
+  const closeMenu = () => {
+    userDropdown.classList.add("is-hidden");
+    userTrigger.setAttribute("aria-expanded", "false");
+  };
+
+  const toggleMenu = () => {
+    const isOpen = !userDropdown.classList.contains("is-hidden");
+    if (isOpen) {
+      closeMenu();
+      return;
+    }
+    userDropdown.classList.remove("is-hidden");
+    userTrigger.setAttribute("aria-expanded", "true");
+  };
+
+  userTrigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleMenu();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Node)) {
+      closeMenu();
+      return;
+    }
+
+    if (!userMenuWrap.contains(event.target)) {
+      closeMenu();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeMenu();
+    }
+  });
+
+  if (logoutMenuButton) {
+    logoutMenuButton.addEventListener("click", async () => {
+      closeMenu();
+      await logoutUser();
+    });
+  }
+
+  if (userAvatarImg && userAvatarInitials) {
+    userAvatarImg.addEventListener("error", () => {
+      userAvatarImg.src = "";
+      userAvatarImg.classList.add("is-hidden");
+      userAvatarInitials.classList.remove("is-hidden");
+    });
+  }
+}
 
 const router = createRouter({
   getCurrentUser: () => state.user,
@@ -370,7 +459,6 @@ async function ensureDefaultPerfil(user) {
     grauAtual: "",
     categoriaDePeso: "",
     pesoAtual: "",
-    pesoCompeticao: "",
     ladoDominante: "",
     estiloPreferido: "",
     frequenciaSemanalDesejada: "",
@@ -509,7 +597,45 @@ function resetPrivateData() {
 }
 
 function rerender() {
-  renderRoute(state.route, state.user);
+  if (rerenderScheduled) {
+    return;
+  }
+
+  rerenderScheduled = true;
+  const schedule = typeof window !== "undefined" && typeof window.requestAnimationFrame === "function"
+    ? window.requestAnimationFrame.bind(window)
+    : (callback) => setTimeout(callback, 16);
+
+  schedule(() => {
+    rerenderScheduled = false;
+    renderRoute(state.route, state.user);
+  });
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function applyTreinosLocal(items) {
+  state.data.treinos = sortTreinosNewestFirst(items.map(sanitizeTreino));
+  computeMetrics();
+}
+
+function applyProgressoLocalPatch(techId, patch) {
+  const current = state.data.progressoApostila?.[techId] || {};
+  state.data.progressoApostila = {
+    ...(state.data.progressoApostila || {}),
+    [techId]: {
+      ...current,
+      ...patch,
+    },
+  };
+  mergeApostilaComProgresso();
+  computeMetrics();
+}
+
+function removeHistoricoLocalById(id) {
+  state.data.historicoGraduacoes = (state.data.historicoGraduacoes || []).filter((item) => item.id !== id);
 }
 
 function getTecnicaResumo(tecnicaIds) {
@@ -552,8 +678,18 @@ async function saveTreino(payload) {
   const now = Date.now();
   const tecnicaIds = Array.from(new Set(payload.tecnicaIds || []));
   const tecnicaResumo = getTecnicaResumo(tecnicaIds);
+  const previousTreinos = cloneJson(state.data.treinos);
+  const isEdit = Boolean(payload.id);
+  const localId = isEdit ? payload.id : push(ref(db, `users/${state.user.uid}/treinos`)).key;
+
+  if (!localId) {
+    setRouteFeedback("treinos", "Não foi possível gerar ID do treino.", "error");
+    rerender();
+    return;
+  }
 
   const base = {
+    id: localId,
     data,
     dataMs,
     tipoTreino: payload.tipoTreino,
@@ -566,14 +702,25 @@ async function saveTreino(payload) {
     updatedAtMs: now,
   };
 
+  const optimistList = isEdit
+    ? state.data.treinos.map((item) => (item.id === localId ? { ...item, ...base } : item))
+    : [{
+        ...base,
+        createdAtMs: now,
+      }, ...state.data.treinos];
+
+  applyTreinosLocal(optimistList);
+  state.ui.treinoEmEdicao = null;
+  setRouteFeedback("treinos", isEdit ? "Atualizando treino..." : "Registrando treino...", "success");
+  rerender();
+
   try {
-    if (payload.id) {
-      const treinoRef = ref(db, `users/${state.user.uid}/treinos/${payload.id}`);
+    if (isEdit) {
+      const treinoRef = ref(db, `users/${state.user.uid}/treinos/${localId}`);
       await update(treinoRef, base);
       setRouteFeedback("treinos", "Treino atualizado com sucesso.", "success");
     } else {
-      const treinosRef = ref(db, `users/${state.user.uid}/treinos`);
-      const treinoRef = push(treinosRef);
+      const treinoRef = ref(db, `users/${state.user.uid}/treinos/${localId}`);
       await set(treinoRef, {
         ...base,
         createdAt: serverTimestamp(),
@@ -581,9 +728,8 @@ async function saveTreino(payload) {
       });
       setRouteFeedback("treinos", "Treino registrado com sucesso.", "success");
     }
-
-    state.ui.treinoEmEdicao = null;
   } catch {
+    applyTreinosLocal(previousTreinos);
     setRouteFeedback("treinos", "Erro ao salvar treino.", "error");
   }
 
@@ -595,6 +741,10 @@ async function deleteTreino(id) {
     return;
   }
 
+  const previousTreinos = cloneJson(state.data.treinos);
+  applyTreinosLocal(state.data.treinos.filter((item) => item.id !== id));
+  setRouteFeedback("treinos", "Removendo treino...", "success");
+
   try {
     const treinoRef = ref(db, `users/${state.user.uid}/treinos/${id}`);
     await set(treinoRef, null);
@@ -604,6 +754,7 @@ async function deleteTreino(id) {
       state.ui.treinoEmEdicao = null;
     }
   } catch {
+    applyTreinosLocal(previousTreinos);
     setRouteFeedback("treinos", "Erro ao excluir treino.", "error");
   }
 
@@ -624,6 +775,17 @@ async function saveTecnicaProgress(payload) {
 
   const now = Date.now();
   const progressRef = ref(db, `users/${state.user.uid}/progressoApostila/${payload.techId}`);
+  const previousProgresso = cloneJson(state.data.progressoApostila || {});
+
+  applyProgressoLocalPatch(payload.techId, {
+    favorita: Boolean(payload.favorita),
+    nivelConfianca,
+    concluida: Boolean(payload.concluida),
+    observacoesPessoais: String(payload.observacoesPessoais || ""),
+    updatedAtMs: now,
+  });
+  setRouteFeedback("tecnicas", "Salvando progresso...", "success");
+  rerender();
 
   try {
     await update(progressRef, {
@@ -636,6 +798,9 @@ async function saveTecnicaProgress(payload) {
     });
     setRouteFeedback("tecnicas", "Progresso da técnica salvo com sucesso.", "success");
   } catch {
+    state.data.progressoApostila = previousProgresso;
+    mergeApostilaComProgresso();
+    computeMetrics();
     setRouteFeedback("tecnicas", "Erro ao salvar progresso da técnica.", "error");
   }
 
@@ -649,6 +814,18 @@ async function saveApostilaDetalhes(payload) {
 
   const now = Date.now();
   const progressRef = ref(db, `users/${state.user.uid}/progressoApostila/${payload.techId}`);
+  const previousProgresso = cloneJson(state.data.progressoApostila || {});
+
+  applyProgressoLocalPatch(payload.techId, {
+    significado: String(payload.significado || ""),
+    detalhesExecucao: String(payload.detalhesExecucao || ""),
+    pontosDeAtencao: String(payload.pontosDeAtencao || ""),
+    errosComuns: String(payload.errosComuns || ""),
+    observacoesDoProfessor: String(payload.observacoesDoProfessor || ""),
+    updatedAtMs: now,
+  });
+  setRouteFeedback("apostila", "Salvando detalhes...", "success");
+  rerender();
 
   try {
     await update(progressRef, {
@@ -662,6 +839,9 @@ async function saveApostilaDetalhes(payload) {
     });
     setRouteFeedback("apostila", "Detalhes da apostila salvos com sucesso.", "success");
   } catch {
+    state.data.progressoApostila = previousProgresso;
+    mergeApostilaComProgresso();
+    computeMetrics();
     setRouteFeedback("apostila", "Erro ao salvar detalhes da apostila.", "error");
   }
 
@@ -692,10 +872,30 @@ async function saveGraduacaoHistorico(payload) {
 
   const dataMs = payload.dataGrad ? new Date(payload.dataGrad + "T12:00:00").getTime() : 0;
   const now = Date.now();
-  const historicoRef = ref(db, `users/${state.user.uid}/historicoGraduacoes`);
+  const previousHistorico = cloneJson(state.data.historicoGraduacoes || []);
+  const localId = push(ref(db, `users/${state.user.uid}/historicoGraduacoes`)).key;
+
+  if (!localId) {
+    setRouteFeedback("perfil", "Não foi possível gerar ID da graduação.", "error");
+    rerender();
+    return;
+  }
+
+  state.data.historicoGraduacoes = [{
+    id: localId,
+    faixa: String(payload.faixa || ""),
+    grau: String(payload.grau || ""),
+    dataGrad: String(payload.dataGrad || ""),
+    dataMs,
+    observacoes: String(payload.observacoes || ""),
+    createdAtMs: now,
+  }, ...(state.data.historicoGraduacoes || [])];
+  state.ui.perfilSecaoAberta = "historico";
+  setRouteFeedback("perfil", "Adicionando graduação...", "success");
+  rerender();
 
   try {
-    const entryRef = push(historicoRef);
+    const entryRef = ref(db, `users/${state.user.uid}/historicoGraduacoes/${localId}`);
     await set(entryRef, {
       faixa: String(payload.faixa || ""),
       grau: String(payload.grau || ""),
@@ -704,9 +904,9 @@ async function saveGraduacaoHistorico(payload) {
       observacoes: String(payload.observacoes || ""),
       createdAtMs: now,
     });
-    state.ui.perfilSecaoAberta = "historico";
     setRouteFeedback("perfil", "Entrada de graduação adicionada.", "success");
   } catch {
+    state.data.historicoGraduacoes = previousHistorico;
     setRouteFeedback("perfil", "Erro ao salvar entrada de graduação.", "error");
   }
 
@@ -718,12 +918,19 @@ async function deleteGraduacaoHistorico(id) {
     return;
   }
 
+  const previousHistorico = cloneJson(state.data.historicoGraduacoes || []);
+  removeHistoricoLocalById(id);
+  state.ui.perfilSecaoAberta = "historico";
+  setRouteFeedback("perfil", "Removendo graduação...", "success");
+  rerender();
+
   try {
     const entryRef = ref(db, `users/${state.user.uid}/historicoGraduacoes/${id}`);
     await set(entryRef, null);
     state.ui.perfilSecaoAberta = "historico";
     setRouteFeedback("perfil", "Entrada removida do histórico.", "success");
   } catch {
+    state.data.historicoGraduacoes = previousHistorico;
     setRouteFeedback("perfil", "Erro ao remover entrada.", "error");
   }
 
@@ -737,6 +944,24 @@ async function updateGraduacaoHistorico(id, payload) {
 
   const dataMs = payload.dataGrad ? new Date(payload.dataGrad + "T12:00:00").getTime() : 0;
   const now = Date.now();
+  const previousHistorico = cloneJson(state.data.historicoGraduacoes || []);
+
+  state.data.historicoGraduacoes = (state.data.historicoGraduacoes || []).map((entry) => (
+    entry.id === id
+      ? {
+          ...entry,
+          faixa: String(payload.faixa || ""),
+          grau: String(payload.grau || ""),
+          dataGrad: String(payload.dataGrad || ""),
+          dataMs,
+          observacoes: String(payload.observacoes || ""),
+          updatedAtMs: now,
+        }
+      : entry
+  ));
+  state.ui.perfilSecaoAberta = "historico";
+  setRouteFeedback("perfil", "Atualizando graduação...", "success");
+  rerender();
 
   try {
     const entryRef = ref(db, `users/${state.user.uid}/historicoGraduacoes/${id}`);
@@ -751,6 +976,7 @@ async function updateGraduacaoHistorico(id, payload) {
     state.ui.perfilSecaoAberta = "historico";
     setRouteFeedback("perfil", "Graduação atualizada com sucesso.", "success");
   } catch {
+    state.data.historicoGraduacoes = previousHistorico;
     setRouteFeedback("perfil", "Erro ao atualizar graduação.", "error");
   }
 
@@ -764,7 +990,7 @@ function renderRoute(route, user) {
   }
 
   view.innerHTML = renderRouteView(route, user, state.data, state.feedback, state.ui);
-  syncShellState({ route, user });
+  syncShellState({ route, user, dataState: state.data });
 
   if (route === "/login") {
     mountLoginHandlers({
@@ -806,8 +1032,21 @@ function renderRoute(route, user) {
           state.ui.perfilSecaoAberta = secao;
         }
 
+        const now = Date.now();
+        const previousPerfil = cloneJson(state.data.perfil || {});
+        const optimisticPerfil = {
+          ...(state.data.perfil || {}),
+          ...payload,
+          nome: payload.nomeCompleto,
+          faixa: payload.faixaAtual,
+          updatedAtMs: now,
+        };
+
+        state.data.perfil = optimisticPerfil;
+        setRouteFeedback("perfil", "Salvando perfil...", "success");
+        rerender();
+
         try {
-          const now = Date.now();
           const perfilRef = ref(db, `users/${state.user.uid}/perfil`);
           await update(perfilRef, {
             ...payload,
@@ -818,6 +1057,7 @@ function renderRoute(route, user) {
           });
           setRouteFeedback("perfil", "Perfil salvo com sucesso.", "success");
         } catch {
+          state.data.perfil = previousPerfil;
           setRouteFeedback("perfil", "Não foi possível salvar o perfil.", "error");
         }
 
@@ -882,42 +1122,31 @@ function renderRoute(route, user) {
   }
 }
 
-function setupLogout() {
-  if (!logoutButton) {
-    return;
-  }
-
-  logoutButton.addEventListener("click", async () => {
-    await logoutUser();
-  });
-}
-
 function start() {
-  setupLogout();
+  setupTopUserMenu();
   mergeApostilaComProgresso();
   computeMetrics();
+  renderSessionBooting();
 
   observeAuthState(async (user) => {
     state.user = user;
 
     if (!user) {
       resetPrivateData();
-      router.refresh();
+      ensureRouterReady();
       return;
     }
 
-    try {
-      await ensureDefaultPerfil(user);
-    } catch {
-      setRouteFeedback("perfil", "Não foi possível inicializar perfil padrão.", "error");
-    }
-
     resetEditingForms();
+    ensureRouterReady();
     bindRealtimeData(user);
-    router.refresh();
+
+    ensureDefaultPerfil(user).catch(() => {
+      setRouteFeedback("perfil", "Não foi possível inicializar perfil padrão.", "error");
+      rerender();
+    });
   });
 
-  router.start();
   initAnalyticsIfEnabled(false);
 }
 

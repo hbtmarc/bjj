@@ -266,6 +266,28 @@ const CATEGORIAS_PESO = [
   { valor: "Pesadíssimo",  label: "Pesadíssimo (Aberto)" },
 ];
 
+const CATEGORIA_POR_PESO = [
+  { maxKg: 57.5, categoria: "Galo" },
+  { maxKg: 64, categoria: "Pluma" },
+  { maxKg: 70, categoria: "Pena" },
+  { maxKg: 76, categoria: "Leve" },
+  { maxKg: 82.3, categoria: "Meio-leve" },
+  { maxKg: 88.3, categoria: "Médio" },
+  { maxKg: 94.3, categoria: "Meio-pesado" },
+  { maxKg: 100.5, categoria: "Pesado" },
+  { maxKg: Number.POSITIVE_INFINITY, categoria: "Super-pesado" },
+];
+
+function inferirCategoriaPorPeso(pesoKg) {
+  const peso = Number(pesoKg);
+  if (!Number.isFinite(peso) || peso <= 0) {
+    return "";
+  }
+
+  const found = CATEGORIA_POR_PESO.find((item) => peso <= item.maxKg);
+  return found?.categoria || "";
+}
+
 const FAIXAS_LIST = ["Branca","Cinza","Amarela","Laranja","Verde","Azul","Roxa","Marrom","Preta"];
 const ADULT_BELT_PATH = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
 const YOUTH_BELT_PATH = ["Branca", "Cinza", "Amarela", "Laranja", "Verde", "Azul", "Roxa", "Marrom", "Preta"];
@@ -751,13 +773,9 @@ function renderPerfil(dataState, feedback, user, uiState) {
             ${categoriaOptions}
           </select>
 
-          <label class="input-label" for="pf-pesoAtual">Peso atual (kg)</label>
+          <label class="input-label" for="pf-pesoAtual">Peso (kg)</label>
           <input class="text-input" id="pf-pesoAtual" name="pesoAtual" type="number" min="30" max="250" step="0.1"
             value="${perfil.pesoAtual || ""}" />
-
-          <label class="input-label" for="pf-pesoCompeticao">Peso de competição (kg)</label>
-          <input class="text-input" id="pf-pesoCompeticao" name="pesoCompeticao" type="number" min="30" max="250" step="0.1"
-            value="${perfil.pesoCompeticao || ""}" />
 
           <label class="input-label" for="pf-ladoDominante">Lado dominante</label>
           <select class="text-input" id="pf-ladoDominante" name="ladoDominante">
@@ -1187,12 +1205,56 @@ function renderApostila(dataState, feedback) {
   `);
 }
 
-export function syncShellState({ route, user }) {
-  const logoutButton = document.querySelector("#btn-logout");
-  const bottomNav = document.querySelector("#bottom-nav");
+function getInitialsFromUser(user, perfil) {
+  const displayName = String(perfil?.nomeCompleto || perfil?.nome || user?.displayName || user?.email?.split("@")[0] || "").trim();
+  if (!displayName) {
+    return "?";
+  }
 
-  if (logoutButton) {
-    logoutButton.classList.toggle("is-hidden", !user);
+  return displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function syncShellState({ route, user, dataState }) {
+  const userMenuWrap = document.querySelector("#top-user-menu");
+  const userTrigger = document.querySelector("#btn-user-menu");
+  const userDropdown = document.querySelector("#top-user-dropdown");
+  const userAvatarImg = document.querySelector("#top-user-avatar-img");
+  const userAvatarInitials = document.querySelector("#top-user-avatar-initials");
+  const bottomNav = document.querySelector("#bottom-nav");
+  const avatarUrl = String(dataState?.perfil?.avatarUrl || "").trim();
+
+  if (userMenuWrap) {
+    userMenuWrap.classList.toggle("is-hidden", !user);
+  }
+
+  if (userTrigger) {
+    userTrigger.setAttribute("aria-expanded", "false");
+  }
+
+  if (userDropdown) {
+    userDropdown.classList.add("is-hidden");
+  }
+
+  if (userAvatarInitials) {
+    userAvatarInitials.textContent = getInitialsFromUser(user, dataState?.perfil);
+  }
+
+  if (userAvatarImg && userAvatarInitials) {
+    if (avatarUrl) {
+      userAvatarImg.src = avatarUrl;
+      userAvatarImg.classList.remove("is-hidden");
+      userAvatarInitials.classList.add("is-hidden");
+    } else {
+      userAvatarImg.src = "";
+      userAvatarImg.classList.add("is-hidden");
+      userAvatarInitials.classList.remove("is-hidden");
+    }
   }
 
   if (bottomNav) {
@@ -1391,6 +1453,29 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
   // ── Unsaved changes hint ──────────────────────────────
   const dirtyHint = document.querySelector("#perfil-dirty-hint");
   const formPerfil = document.querySelector("#form-perfil");
+  const pesoInput = document.querySelector("#pf-pesoAtual");
+  const categoriaPesoSelect = document.querySelector("#pf-categoriaDePeso");
+
+  const syncCategoriaPorPeso = () => {
+    if (!pesoInput || !categoriaPesoSelect) {
+      return;
+    }
+
+    const categoriaAuto = inferirCategoriaPorPeso(pesoInput.value);
+    if (!categoriaAuto) {
+      return;
+    }
+
+    if (categoriaPesoSelect.value !== categoriaAuto) {
+      categoriaPesoSelect.value = categoriaAuto;
+      categoriaPesoSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  };
+
+  if (pesoInput && categoriaPesoSelect) {
+    pesoInput.addEventListener("input", syncCategoriaPorPeso);
+    pesoInput.addEventListener("change", syncCategoriaPorPeso);
+  }
 
   if (formPerfil && dirtyHint) {
     const showDirty = () => dirtyHint.classList.remove("is-hidden");
@@ -1405,7 +1490,6 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
       const formData = new FormData(formPerfil);
       const secao = String(formData.get("secao") || "").trim() || null;
       const pesoAtualRaw = formData.get("pesoAtual");
-      const pesoCompRaw = formData.get("pesoCompeticao");
       const freqRaw = formData.get("frequenciaSemanalDesejada");
 
       if (dirtyHint) {
@@ -1426,7 +1510,6 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
           grauAtual: String(formData.get("grauAtual") || "").trim(),
           categoriaDePeso: String(formData.get("categoriaDePeso") || "").trim(),
           pesoAtual: pesoAtualRaw !== "" && pesoAtualRaw !== null ? Number(pesoAtualRaw) : "",
-          pesoCompeticao: pesoCompRaw !== "" && pesoCompRaw !== null ? Number(pesoCompRaw) : "",
           ladoDominante: String(formData.get("ladoDominante") || "").trim(),
           estiloPreferido: String(formData.get("estiloPreferido") || "").trim(),
           frequenciaSemanalDesejada: freqRaw !== "" && freqRaw !== null ? Number(freqRaw) : "",

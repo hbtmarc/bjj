@@ -18,7 +18,18 @@
         <div class="app-shell">
             <header class="top-header">
                 <h1 class="brand">Rastreador de Progresso BJJ</h1>
-                <button id="btn-logout" class="ghost-btn is-hidden" type="button">Sair</button>
+                <div id="top-user-menu" class="top-user-menu is-hidden">
+                    <button id="btn-user-menu" class="top-user-trigger" type="button" aria-label="Abrir menu do usuário" aria-haspopup="menu" aria-expanded="false">
+                        <img id="top-user-avatar-img" class="top-user-avatar-img is-hidden" src="" alt="Avatar do usuário" />
+                        <span id="top-user-avatar-initials" class="top-user-avatar-initials">?</span>
+                    </button>
+                    <div id="top-user-dropdown" class="top-user-dropdown is-hidden" role="menu" aria-label="Menu do usuário">
+                        <button id="btn-logout-menu" class="top-user-menu-item" type="button" role="menuitem" aria-label="Sair">
+                            <span class="top-user-menu-icon" aria-hidden="true">↪</span>
+                            <span>Sair</span>
+                        </button>
+                    </div>
+                </div>
             </header>
 
             <main id="app-view" class="main-view" aria-live="polite"></main>

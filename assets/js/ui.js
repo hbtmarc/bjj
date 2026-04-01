@@ -1,3 +1,23 @@
+/* ── Inline SVG icon system ─────────────────────────────────── */
+const ICONS = {
+  edit: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M9.5 3.5l3 3"/></svg>',
+  trash: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4m2 0v9.33a1.33 1.33 0 01-1.34 1.34H4.67a1.33 1.33 0 01-1.34-1.34V4h9.34z"/></svg>',
+  plus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v10M3 8h10"/></svg>',
+  save: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.33 14H2.67A1.33 1.33 0 011.33 12.67V3.33A1.33 1.33 0 012.67 2h8l3.33 3.33v7.34A1.33 1.33 0 0112.67 14z"/><path d="M11.33 14V8.67H4.67V14"/><path d="M4.67 2v3.33h5.33"/></svg>',
+  logout: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14H3.33A1.33 1.33 0 012 12.67V3.33A1.33 1.33 0 013.33 2H6"/><path d="M10.67 11.33L14 8l-3.33-3.33"/><path d="M14 8H6"/></svg>',
+  cancel: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L4 12M4 4l8 8"/></svg>',
+  login: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14h2.67A1.33 1.33 0 0014 12.67V3.33A1.33 1.33 0 0012.67 2H10"/><path d="M5.33 11.33L2 8l3.33-3.33"/><path d="M2 8h8"/></svg>',
+  camera: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.33 5.33A1.33 1.33 0 012.67 4h1.66L5.67 2.67h4.66L11.67 4h1.66a1.33 1.33 0 011.34 1.33v6.67a1.33 1.33 0 01-1.34 1.33H2.67a1.33 1.33 0 01-1.34-1.33V5.33z"/><circle cx="8" cy="8" r="2.33"/></svg>',
+  removeImg: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.33" y="2.67" width="13.33" height="10.67" rx="1.33"/><path d="M5.67 6.33l4.66 4.67M10.33 6.33L5.67 11"/></svg>',
+};
+
+function iconBtn(icon, label, { cls = "icon-btn", extra = "" } = {}) {
+  return `<button class="${cls}" type="button" aria-label="${label}" title="${label}" ${extra}>${ICONS[icon] || ""}</button>`;
+}
+function iconSubmit(icon, label, { cls = "icon-btn primary-icon-btn", extra = "" } = {}) {
+  return `<button class="${cls}" type="submit" aria-label="${label}" title="${label}" ${extra}>${ICONS[icon] || ""}<span class="icon-btn-label">${label}</span></button>`;
+}
+
 function card(content) {
   return `<section class="card">${content}</section>`;
 }
@@ -478,9 +498,13 @@ function renderPerfil(dataState, feedback, user, uiState) {
     const faixaOptEditList = ensurePathContainsFaixa(beltPath, entry.faixa);
     const faixaOptEdit = faixaOptEditList.map((f) => `<option value="${f}" ${entry.faixa === f ? "selected" : ""}>${f}</option>`).join("");
     const grauOptEdit = [0,1,2,3,4].map((g) => `<option value="${g}" ${String(entry.grau) === String(g) ? "selected" : ""}>${g === 0 ? "Sem grau" : g + "° grau"}</option>`).join("");
+    const eGrauNum = Math.max(0, Number(entry.grau) || 0);
+    const innerDots = eGrauNum > 0
+      ? `<span class="grad-tl-grau-dots" aria-label="${eGrauNum} grau${eGrauNum > 1 ? 's' : ''}">${Array.from({ length: eGrauNum }, () => '<span class="grad-tl-inner-dot"></span>').join('')}</span>`
+      : '';
     return `
-      <li class="grad-tl-item" style="border-left-color:${eDotBg}">
-        <div class="grad-tl-dot" style="background:${eDotBg};border-color:${eDotBorder};box-shadow:0 0 0 3px ${eDotBg}30,0 1px 4px rgba(0,0,0,0.15)" aria-hidden="true"></div>
+      <li class="grad-tl-item" style="--tl-belt-bg:${eDotBg};--tl-belt-border:${eDotBorder}">
+        <div class="grad-tl-dot" aria-hidden="true">${innerDots}</div>
         <div class="grad-tl-body">
           <div class="grad-tl-row">
             <div class="grad-tl-info">
@@ -489,8 +513,8 @@ function renderPerfil(dataState, feedback, user, uiState) {
               ${entry.observacoes ? `<p class="grad-tl-obs">${entry.observacoes}</p>` : ""}
             </div>
             <div class="grad-tl-actions">
-              <button class="ghost-btn btn-edit-grad" type="button" data-grad-id="${entry.id}">Editar</button>
-              <button class="ghost-btn danger-btn btn-del-grad" type="button" data-grad-id="${entry.id}">Remover</button>
+              ${iconBtn('edit', 'Editar', { cls: 'icon-btn btn-edit-grad', extra: `data-grad-id="${entry.id}"` })}
+              ${iconBtn('trash', 'Remover', { cls: 'icon-btn danger-icon-btn btn-del-grad', extra: `data-grad-id="${entry.id}"` })}
             </div>
           </div>
           <form class="grad-tl-edit-form form-grid is-hidden" data-grad-id="${entry.id}" novalidate>
@@ -507,7 +531,7 @@ function renderPerfil(dataState, feedback, user, uiState) {
             <label class="input-label" for="egh-obs-${entry.id}">Observações</label>
             <textarea class="text-input text-area compact-area" id="egh-obs-${entry.id}" name="obsEdit">${entry.observacoes || ""}</textarea>
             <div class="perfil-section-save">
-              <button class="primary-btn" type="submit">Salvar alterações</button>
+              ${iconSubmit('save', 'Salvar alterações')}
             </div>
           </form>
         </div>
@@ -530,7 +554,7 @@ function renderPerfil(dataState, feedback, user, uiState) {
           <input id="perfil-avatar-input" type="file" accept="image/*" class="sr-only" />
           <span class="perfil-avatar-hint">Alterar foto</span>
         </label>
-        <button id="btn-remove-avatar" class="ghost-btn danger-btn perfil-remove-avatar is-hidden" type="button">Remover foto</button>
+        <button id="btn-remove-avatar" class="icon-btn danger-icon-btn perfil-remove-avatar is-hidden" type="button" aria-label="Remover foto" title="Remover foto">${ICONS.removeImg}</button>
       </div>
 
       <div class="perfil-athlete-info">
@@ -603,7 +627,7 @@ function renderPerfil(dataState, feedback, user, uiState) {
           </select>
 
           <div class="perfil-section-save">
-            <button class="primary-btn" type="submit" name="secao" value="identidade">Salvar identidade</button>
+            <button class="primary-icon-btn" type="submit" name="secao" value="identidade">${ICONS.save}<span class="icon-btn-label">Salvar identidade</span></button>
           </div>
         </div>
       </details>
@@ -666,7 +690,7 @@ function renderPerfil(dataState, feedback, user, uiState) {
           <textarea class="text-input text-area" id="pf-obsEvolucao" name="observacoesDeEvolucao">${perfil.observacoesDeEvolucao || ""}</textarea>
 
           <div class="perfil-section-save">
-            <button class="primary-btn" type="submit" name="secao" value="esportes">Salvar dados esportivos</button>
+            <button class="primary-icon-btn" type="submit" name="secao" value="esportes">${ICONS.save}<span class="icon-btn-label">Salvar esportivos</span></button>
           </div>
         </div>
       </details>
@@ -699,12 +723,12 @@ function renderPerfil(dataState, feedback, user, uiState) {
           </div>
 
           <div class="perfil-section-save">
-            <button class="primary-btn" type="submit" name="secao" value="preferencias">Salvar preferências</button>
+            <button class="primary-icon-btn" type="submit" name="secao" value="preferencias">${ICONS.save}<span class="icon-btn-label">Salvar preferências</span></button>
           </div>
 
           <div class="perfil-actions-secondary">
             <p class="input-label">Ações da conta</p>
-            <button id="btn-perfil-logout" class="ghost-btn danger-btn" type="button">Sair da conta</button>
+            <button id="btn-perfil-logout" class="icon-btn danger-icon-btn" type="button" aria-label="Sair da conta" title="Sair da conta">${ICONS.logout}<span class="icon-btn-label">Sair</span></button>
           </div>
         </div>
       </details>
@@ -774,7 +798,7 @@ function renderPerfil(dataState, feedback, user, uiState) {
           <textarea class="text-input text-area compact-area" id="gh-obs" name="obsGrad"></textarea>
 
           <div class="perfil-section-save">
-            <button class="primary-btn" type="submit">Adicionar entrada</button>
+            <button class="primary-icon-btn" type="submit">${ICONS.plus}<span class="icon-btn-label">Adicionar</span></button>
           </div>
         </form>
 
@@ -881,8 +905,8 @@ function renderTreinos(dataState, feedback, uiState) {
       ${renderTecnicaSelector(apostilaItems, editingTreino?.tecnicaIds || [])}
 
       <div class="actions-row">
-        <button class="primary-btn" type="submit">${editingTreino ? "Atualizar treino" : "Salvar treino"}</button>
-        ${editingTreino ? "<button id=\"btn-cancelar-edicao-treino\" class=\"ghost-btn\" type=\"button\">Cancelar edição</button>" : ""}
+        <button class="primary-icon-btn" type="submit">${ICONS.save}<span class="icon-btn-label">${editingTreino ? "Atualizar" : "Salvar treino"}</span></button>
+        ${editingTreino ? `<button id="btn-cancelar-edicao-treino" class="icon-btn" type="button" aria-label="Cancelar edição" title="Cancelar edição">${ICONS.cancel}<span class="icon-btn-label">Cancelar</span></button>` : ""}
       </div>
     </form>
 
@@ -902,8 +926,8 @@ function renderTreinos(dataState, feedback, uiState) {
               ? item.tecnicaResumo.map((tecnica) => `<span class=\"chip\">${tecnica.nome}</span>`).join("")
               : "<span class=\"empty-state\">Sem técnicas vinculadas.</span>"}</p>
             <div class="actions-row">
-              <button class="ghost-btn btn-editar-treino" type="button" data-id="${item.id}">Editar</button>
-              <button class="ghost-btn danger-btn btn-excluir-treino" type="button" data-id="${item.id}">Excluir</button>
+              ${iconBtn('edit', 'Editar', { cls: 'icon-btn btn-editar-treino', extra: `data-id="${item.id}"` })}
+              ${iconBtn('trash', 'Excluir', { cls: 'icon-btn danger-icon-btn btn-excluir-treino', extra: `data-id="${item.id}"` })}
             </div>
           </li>
         `
@@ -967,7 +991,7 @@ function renderTecnicas(dataState, feedback, uiState) {
               <label class="input-label" for="obs-${item.id}">Observações pessoais</label>
               <textarea class="text-input text-area compact-area" id="obs-${item.id}" name="observacoesPessoais">${item.observacoesPessoais || ""}</textarea>
 
-              <button class="ghost-btn quick-btn" type="submit">Salvar</button>
+              <button class="icon-btn quick-btn" type="submit" aria-label="Salvar" title="Salvar">${ICONS.save}<span class="icon-btn-label">Salvar</span></button>
             </form>
           </li>
         `
@@ -1045,7 +1069,7 @@ function renderApostila(dataState, feedback) {
                   <label class="input-label" for="prof-${item.id}">Observações do professor</label>
                   <textarea class="text-input text-area" id="prof-${item.id}" name="observacoesDoProfessor">${item.observacoesDoProfessor || ""}</textarea>
 
-                  <button class="ghost-btn quick-btn" type="submit">Salvar detalhes</button>
+                  <button class="icon-btn quick-btn" type="submit" aria-label="Salvar detalhes" title="Salvar detalhes">${ICONS.save}<span class="icon-btn-label">Salvar</span></button>
                 </form>
                 </div>
               </details>
@@ -1096,7 +1120,7 @@ export function renderRouteView(route, user, dataState, feedbackByRoute, uiState
           <input id="email" name="email" class="text-input" type="email" placeholder="voce@exemplo.com" autocomplete="email" required />
           <label class="input-label" for="senha">Senha</label>
           <input id="senha" name="senha" class="text-input" type="password" placeholder="Digite sua senha" autocomplete="current-password" required />
-          <button class="primary-btn" type="submit">Entrar com e-mail</button>
+          <button class="primary-icon-btn" type="submit">${ICONS.login}<span class="icon-btn-label">Entrar com e-mail</span></button>
         </form>
         <p class="sep">ou</p>
         <button id="btn-google" class="google-btn" type="button">Entrar com Google</button>

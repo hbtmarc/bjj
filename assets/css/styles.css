@@ -87,6 +87,72 @@ body {
   background: var(--surface-soft);
 }
 
+/* ── Icon button system ───────────────────────────────── */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0.38rem 0.52rem;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--surface-soft);
+}
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.icon-btn svg {
+  flex-shrink: 0;
+}
+
+.primary-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.9rem;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.88rem;
+  line-height: 1;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.primary-icon-btn:hover {
+  background: var(--primary-strong);
+}
+.primary-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.primary-icon-btn svg {
+  flex-shrink: 0;
+}
+
+.danger-icon-btn {
+  color: var(--danger);
+}
+.danger-icon-btn:hover {
+  background: #fef2f2;
+}
+
+.icon-btn-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
 .main-view {
   flex: 1;
   width: min(920px, 100%);
@@ -946,30 +1012,26 @@ html.reduce-motion * {
 .grad-timeline {
   list-style: none;
   margin: 0 0 var(--space-3);
-  padding: 0;
+  padding: 0 0 0 1.1rem;
   position: relative;
 }
 
 .grad-timeline::before {
   content: "";
   position: absolute;
-  left: 0.6rem;
-  top: 0.75rem;
-  bottom: 0.75rem;
-  width: 2px;
-  background: var(--belt-path-gradient, linear-gradient(180deg, #ffffff 0%, #1f2937 100%));
-  border-radius: 1px;
-  opacity: 0.7;
+  left: 0.85rem;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--belt-path-gradient, linear-gradient(180deg, #e5e7eb 0%, #1f2937 100%));
+  border-radius: 2px;
 }
 
 .grad-tl-item {
   display: flex;
   gap: var(--space-3);
   position: relative;
-  padding-bottom: var(--space-3);
-  border-left: 2px solid transparent;
-  margin-left: 0.6rem;
-  padding-left: 0.5rem;
+  padding: 0 0 var(--space-4) 0.6rem;
 }
 
 .grad-tl-item:last-child {
@@ -977,17 +1039,36 @@ html.reduce-motion * {
 }
 
 .grad-tl-dot {
-  width: 1.3rem;
-  height: 1.3rem;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
-  border: 2.5px solid var(--border);
-  background: var(--surface);
+  border: 2.5px solid var(--tl-belt-border, var(--border));
+  background: var(--tl-belt-bg, var(--surface));
   flex-shrink: 0;
-  margin-top: 0.15rem;
-  margin-left: -1.28rem;
+  margin-top: 0.1rem;
+  margin-left: -1.42rem;
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tl-belt-bg, #ccc) 25%, transparent), 0 1px 4px rgba(0,0,0,0.12);
   transition: box-shadow 0.15s ease;
+}
+
+.grad-tl-grau-dots {
+  display: flex;
+  align-items: center;
+  gap: 1.5px;
+}
+
+.grad-tl-inner-dot {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: #111827;
+  box-shadow: 0 0 0 0.5px rgba(255,255,255,0.8);
 }
 
 .grad-tl-body {
@@ -1028,8 +1109,9 @@ html.reduce-motion * {
 
 .grad-tl-actions {
   display: flex;
-  gap: var(--space-1);
+  gap: 0.25rem;
   flex-shrink: 0;
+  align-items: center;
 }
 
 .grad-tl-edit-form {

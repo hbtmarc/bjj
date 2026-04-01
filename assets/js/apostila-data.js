@@ -6,15 +6,15 @@ const orderedSections = [
     itens: [
       "Rolamento para frente estático",
       "Rolamento para frente dinâmico",
-      "Caída para traz estático em guarda",
-      "Rolamento para traz dinâmico",
+      "Caída para trás estática em guarda",
+      "Rolamento para trás dinâmico",
       "Rolamento Lateral estático",
       "Rolamento Lateral dinâmico",
       "Caída lateral",
-      "Postura lateral cocóras",
-      "Caída Facial a frente",
-      "Caída Facial para traz",
-      "Tabua",
+      "Postura lateral cócoras",
+      "Caída facial à frente",
+      "Caída facial para trás",
+      "Tábua",
     ],
   },
   {
@@ -26,7 +26,7 @@ const orderedSections = [
       "Salto sobre um obstáculo vertical em rolamento",
       "Salto sobre um obstáculo horizontal",
       "Cambalhota",
-      "Salto sobre uma tabua",
+      "Salto sobre uma tábua",
       "Sapo",
       "Gato",
       "Palha de arroz",
@@ -37,11 +37,11 @@ const orderedSections = [
     titulo: "SHIMSEI / BASES",
     categoria: "SHIMSEI",
     itens: [
-      "KO KUTSU - Perna de traz em flexão e a da frente avançada",
+      "KO KUTSU - Perna de trás em flexão e a da frente avançada",
       "KIBA TATCHI - A cavalo",
       "FUDO DACHI - Meio passo peso distribuído",
       "HI SOKO - Pés juntos",
-      "ZEM KUTSU - Esquerda a frente em flexão",
+      "ZEM KUTSU - Esquerda à frente em flexão",
     ],
   },
   {
@@ -54,7 +54,7 @@ const orderedSections = [
   },
   {
     id: "shintai",
-    titulo: "SHINTAI / DESLISAMENTO NA BASE KIBADASHI",
+    titulo: "SHINTAI / DESLIZAMENTO NA BASE KIBADASHI",
     categoria: "SHINTAI",
     itens: [
       "DESLIZAMENTO COMPLETO",
@@ -73,8 +73,8 @@ const orderedSections = [
       "Uki otoshi",
       "Tomoe nage com um pé",
       "Kami waza (kani bassi) = tesoura",
-      "ippon seio nage",
-      "Seio nage",
+      "Ippon seoi nage",
+      "Seoi nage",
       "Sumi gaeshi com um pé",
       "Tsuri komi goshi",
       "Ogoshi",
@@ -97,10 +97,10 @@ const orderedSections = [
     titulo: "CONTRA ATAQUE DAS PROJEÇÕES ACIMA",
     categoria: "CONTRA ATAQUE",
     itens: [
-      "A criterio 1",
-      "A criterio 2",
-      "A criterio 3",
-      "A criterio 4",
+      "A critério 1",
+      "A critério 2",
+      "A critério 3",
+      "A critério 4",
     ],
   },
   {
@@ -109,7 +109,7 @@ const orderedSections = [
     categoria: "KANSETSU. TE-WAZA",
     itens: [
       "Juji gatame 2 no tate shiho gatame",
-      "Juji gatame 3 partir do joelho na barriga e girando para o lado oposto",
+      "Juji gatame 3 a partir do joelho na barriga e girando para o lado oposto",
       "Juji gatame no tate shiho gatame nos dois braços",
       "Juji gatame na guarda nos dois braços com trava",
       "Juji gatame na guarda",
@@ -120,10 +120,10 @@ const orderedSections = [
       "Ude garame 2 em pé",
       "Ude garame 2 no kami shiho gatame",
       "Juji gatame 1 no tate shiho gatame",
-      "kote gaeshi chave de pulsos para dentro",
+      "Kote gaeshi chave de pulsos para dentro",
       "Kote gaeshi chave de pulso para fora",
-      "Kote gaeshi contra  a mão na lapela, estando em pé",
-      "kote gaeshi no sankaku",
+      "Kote gaeshi contra a mão na lapela, estando em pé",
+      "Kote gaeshi no sankaku",
       "Kote gaeshi na imobilização lateral",
     ],
   },
@@ -134,20 +134,20 @@ const orderedSections = [
     itens: [
       "Jigoku jime",
       "Hakada jime 4  na guarda",
-      "Okuri eri jime pegada pela costas ajoelhado",
+      "Okuri eri jime pegada pelas costas ajoelhado",
       "Okuri eri jime 2 montado nas costas",
-      "Okuri eri jime 3 em relogio",
+      "Okuri eri jime 3 em relógio",
       "Sode guruma jime na guarda",
-      "Estrangulamento com a lapela partir do Yoko shiho gatame",
+      "Estrangulamento com a lapela a partir do Yoko shiho gatame",
       "Contornada no tate shiho gatame",
       "Cruz direta no tate shiho gatame",
       "Sankaku jime 1 (tradicional)",
       "Sankaku jime 2 (invertido)",
-      "Sankaku jime 3 (nos quatro apaios)",
+      "Sankaku jime 3 (nos quatro apoios)",
       "Hakada jime com pegada pelas costas",
       "Finalização no omoplata",
       "Jiaku Jime no tate shiho gatame",
-      "Juji gatame pulando na guarda a criterio",
+      "Juji gatame pulando na guarda a critério",
     ],
   },
   {
@@ -158,9 +158,9 @@ const orderedSections = [
       "Pelo meio",
       "Por fora esgrimando as duas pernas",
       "Passagem de guarda em pé",
-      "Dinamica com dril",
+      "Dinâmica com drill",
       "Lateral",
-      "Estragunlamento iniciando em pé",
+      "Estrangulamento iniciando em pé",
     ],
   },
   {
@@ -182,7 +182,7 @@ const orderedSections = [
     categoria: "NE-WAZA",
     itens: [
       "Yoko shiho gatame",
-      "kami shiho gatame",
+      "Kami shiho gatame",
       "Ushiro kesa gatame",
       "Tate shiho gatame",
       "Kata gatame",
@@ -204,17 +204,17 @@ const orderedSections = [
   },
   {
     id: "katame-dominios",
-    titulo: "KATAME-WAZA / DOMÍNIOS BÁSICO",
+    titulo: "KATAME-WAZA / DOMÍNIOS BÁSICOS",
     categoria: "KATAME-WAZA",
     itens: [
-      "DOMINIO COM O JOELHO NA BARRIGA",
-      "DOMINIO DOS QUATRO APOIOS PARTIR DA LATERAL",
+      "DOMÍNIO COM O JOELHO NA BARRIGA",
+      "DOMÍNIO DOS QUATRO APOIOS A PARTIR DA LATERAL",
     ],
   },
   {
     id: "kansentsu-ashi-chaves",
-    titulo: "KANSENTSU. ASHI-WASA / CHAVES DE PERNAS OU NOS PÉS",
-    categoria: "KANSENTSU. ASHI-WASA",
+    titulo: "KANSETSU. ASHI-WAZA / CHAVES DE PERNAS OU NOS PÉS",
+    categoria: "KANSETSU. ASHI-WAZA",
     itens: [
       "De pé em uma perna",
       "Sentado, ataque em uma perna",
@@ -224,8 +224,8 @@ const orderedSections = [
   },
   {
     id: "kansentsu-ashi-defesas",
-    titulo: "KANSENTSU. ASHI-WASA / DEFESAS",
-    categoria: "KANSENTSU. ASHI-WASA",
+    titulo: "KANSETSU. ASHI-WAZA / DEFESAS",
+    categoria: "KANSETSU. ASHI-WAZA",
     itens: [
       "De pé em uma perna",
       "Sentado, ataque em uma perna",
@@ -238,7 +238,7 @@ const orderedSections = [
     itens: [
       "Prisão do tronco pela frente (braços soltos)",
       "Prisão do tronco pela frente (braços presos)",
-      "Prisão do tronco por tras (braços presos)",
+      "Prisão do tronco por trás (braços presos)",
     ],
   },
   {
@@ -249,18 +249,34 @@ const orderedSections = [
       "Pular na guarda corretamente",
       "Defesa do bate estaca com os dois braços",
       "Defesa do bate estaca com um braço",
-      "Dominio das costas partir da guarda com o oponente em pé",
-      "Dominio das costas quando os dois  estão em pé",
+      "Domínio das costas a partir da guarda com o oponente em pé",
+      "Domínio das costas quando os dois estão em pé",
     ],
   },
 ];
+
+function normalizeApostilaItemName(nome) {
+  const text = String(nome || "");
+  if (!text) {
+    return "";
+  }
+
+  const firstChar = text.charAt(0);
+  const upperFirstChar = firstChar.toLocaleUpperCase("pt-BR");
+
+  if (firstChar === upperFirstChar) {
+    return text;
+  }
+
+  return `${upperFirstChar}${text.slice(1)}`;
+}
 
 export const apostilaSections = orderedSections.map((section, sectionIndex) => {
   const ordemSecao = sectionIndex + 1;
 
   const itens = section.itens.map((nome, itemIndex) => ({
     id: `${section.id}-${String(itemIndex + 1).padStart(2, "0")}`,
-    nome,
+    nome: normalizeApostilaItemName(nome),
     categoria: section.categoria,
     linhaGrupo: section.titulo,
     secaoId: section.id,

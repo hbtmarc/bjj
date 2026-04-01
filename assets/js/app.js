@@ -1116,9 +1116,7 @@ function renderRoute(route, user) {
   }
 
   if (route === "/apostila") {
-    mountApostilaHandlers({
-      onSaveDetalhes: saveApostilaDetalhes,
-    });
+    mountApostilaHandlers();
   }
 }
 

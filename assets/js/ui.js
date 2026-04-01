@@ -755,13 +755,13 @@ function renderPerfil(dataState, feedback, user, uiState) {
       <details class="perfil-section" data-secao="esportes" ${secaoAberta === "esportes" ? "open" : ""}>
         <summary class="perfil-section-title">Dados esportivos</summary>
         <div class="perfil-section-body form-grid">
-          <label class="input-label" for="pf-faixaAtual">Faixa atual <span class="perfil-field-hint">(suplente ao histórico)</span></label>
+          <label class="input-label" for="pf-faixaAtual">Faixa atual <span class="perfil-field-hint">(suplementar ao histórico)</span></label>
           <select class="text-input" id="pf-faixaAtual" name="faixaAtual">
             <option value="">— selecione —</option>
             ${faixaOptions}
           </select>
 
-          <label class="input-label" for="pf-grauAtual">Grau atual <span class="perfil-field-hint">(suplente ao histórico)</span></label>
+          <label class="input-label" for="pf-grauAtual">Grau atual <span class="perfil-field-hint">(suplementar ao histórico)</span></label>
           <select class="text-input" id="pf-grauAtual" name="grauAtual">
             <option value="">— selecione —</option>
             ${grauOptions}
@@ -1118,90 +1118,68 @@ function renderTecnicas(dataState, feedback, uiState) {
 
 function renderApostila(dataState, feedback) {
   const sections = [...(dataState.apostilaSections || [])].sort((left, right) => (left.ordemSecao || 0) - (right.ordemSecao || 0));
-  const byId = new Map((dataState.apostilaItemsComProgresso || []).map((item) => [item.id, item]));
-  const metrics = dataState.metrics;
 
   return card(`
     <h2 class="page-title">Apostila</h2>
-    <p class="page-subtitle">Conteúdo organizado por seções da apostila do instrutor.</p>
+    <p class="page-subtitle">Leitura oficial para estudo e memorização, em ordem da apostila.</p>
     ${formMessage(feedback)}
 
-    <section class="apostila-topbar">
-      <article class="topbar-item"><span>Total</span><strong>${metrics.totalItensApostila}</strong></article>
-      <article class="topbar-item"><span>Concluídos</span><strong>${metrics.itensConcluidos}</strong></article>
-      <article class="topbar-item"><span>Favoritos</span><strong>${metrics.itensFavoritados}</strong></article>
-      <article class="topbar-item"><span>Confiança média</span><strong>${metrics.confiancaMedia}</strong></article>
-    </section>
+    <div class="apostila-reading-layout">
+      <aside class="apostila-sidebar" aria-label="Navegação das seções da apostila">
+        <p class="apostila-sidebar-title">Seções oficiais</p>
+        <nav class="apostila-sidebar-nav" aria-label="Índice oficial da apostila">
+          <ol class="apostila-sidebar-list">
+            ${sections
+              .map(
+                (section, idx) => `
+                  <li>
+                    <button type="button" class="btn-apostila-nav ${idx === 0 ? "is-active" : ""}" data-target-id="secao-${section.id}" data-section-id="${section.id}">
+                      ${section.ordemSecao}. ${section.titulo}
+                    </button>
+                  </li>
+                `
+              )
+              .join("")}
+          </ol>
+        </nav>
+      </aside>
 
-    <nav class="apostila-index" aria-label="Índice da apostila">
-      ${sections
-        .map(
-          (section) => `<button type="button" class="index-pill btn-indice-secao" data-target-id="secao-${section.id}">${section.ordemSecao}. ${section.titulo}</button>`
-        )
-        .join("")}
-    </nav>
+      <section class="apostila-reading-content" aria-label="Conteúdo da apostila">
+        <div class="apostila-mobile-menu-wrap">
+          <label class="input-label" for="apostila-mobile-select">Seção da apostila</label>
+          <select class="text-input" id="apostila-mobile-select">
+            ${sections
+              .map(
+                (section) => `<option value="${section.id}">${section.ordemSecao}. ${section.titulo}</option>`
+              )
+              .join("")}
+          </select>
+        </div>
 
-    ${sections
-      .map((section) => {
-        const orderedItens = [...section.itens].sort(compareByOrdem);
-        const rows = orderedItens
-          .map((seedItem) => {
-            const item = byId.get(seedItem.id) || seedItem;
-            const hasAnyDetail = Boolean(item.significado || item.detalhesExecucao || item.pontosDeAtencao || item.errosComuns || item.observacoesDoProfessor);
-
+        ${sections
+          .map((section) => {
+            const orderedItens = [...section.itens].sort(compareByOrdem);
             return `
-            <li class="apostila-row">
-              <details class="apostila-item-disclosure">
-                <summary class="apostila-row-summary">
-                  <div class="apostila-row-left">
-                    <p class="apostila-ordem">${item.ordemSecao}.${item.ordemItem}</p>
-                    <p class="apostila-title"><strong>${item.nome}</strong></p>
-                  </div>
-                  <div class="apostila-row-right">
-                    <div class="apostila-badges">
-                      ${item.favorita ? '<span class="chip">Favorita</span>' : ''}
-                      ${item.concluida ? '<span class="chip">Concluída</span>' : ''}
-                      <span class="chip">Confiança ${item.nivelConfianca || 0}</span>
-                    </div>
-                    <span class="apostila-action">Detalhes</span>
-                  </div>
-                </summary>
-                <div class="details-panel apostila-detail-panel">
-                  <p class="apostila-detail-meta">Grupo/Categoria: ${item.categoria} • ${item.linhaGrupo}</p>
-                  ${hasAnyDetail ? "" : "<p class=\"empty-state\">Conteúdo pendente</p>"}
-                  <form class="form-apostila-detalhes form-grid" data-tech-id="${item.id}">
-                  <label class="input-label" for="sig-${item.id}">Significado</label>
-                  <textarea class="text-input text-area" id="sig-${item.id}" name="significado">${item.significado || ""}</textarea>
-
-                  <label class="input-label" for="det-${item.id}">Detalhes de execução</label>
-                  <textarea class="text-input text-area" id="det-${item.id}" name="detalhesExecucao">${item.detalhesExecucao || ""}</textarea>
-
-                  <label class="input-label" for="pta-${item.id}">Pontos de atenção</label>
-                  <textarea class="text-input text-area" id="pta-${item.id}" name="pontosDeAtencao">${item.pontosDeAtencao || ""}</textarea>
-
-                  <label class="input-label" for="err-${item.id}">Erros comuns</label>
-                  <textarea class="text-input text-area" id="err-${item.id}" name="errosComuns">${item.errosComuns || ""}</textarea>
-
-                  <label class="input-label" for="prof-${item.id}">Observações do professor</label>
-                  <textarea class="text-input text-area" id="prof-${item.id}" name="observacoesDoProfessor">${item.observacoesDoProfessor || ""}</textarea>
-
-                  <button class="icon-btn quick-btn" type="submit" aria-label="Salvar detalhes" title="Salvar detalhes">${ICONS.save}<span class="icon-btn-label">Salvar</span></button>
-                </form>
-                </div>
-              </details>
-            </li>
-          `;
+              <section class="apostila-study-section" id="secao-${section.id}" data-section-id="${section.id}">
+                <h3 class="apostila-study-title">${section.ordemSecao}. ${section.titulo}</h3>
+                <ol class="apostila-study-list">
+                  ${orderedItens
+                    .map(
+                      (item) => `
+                        <li class="apostila-study-row">
+                          <span class="apostila-ordem">${item.ordemSecao}.${item.ordemItem}</span>
+                          <span class="apostila-title"><strong>${item.nome}</strong></span>
+                        </li>
+                      `
+                    )
+                    .join("")}
+                </ol>
+              </section>
+            `;
           })
-          .join("");
-
-        return `
-          <details class="apostila-section" id="secao-${section.id}" ${section.ordemSecao === 1 ? "open" : ""}>
-            <summary class="section-title apostila-section-summary">${section.ordemSecao}. ${section.titulo}</summary>
-            <ul class="entity-list">${rows}</ul>
-          </details>
-        `;
-      })
-      .join("")}
+          .join("")}
+      </section>
+    </div>
   `);
 }
 
@@ -1683,43 +1661,79 @@ export function mountTecnicasHandlers({ onSaveProgress, onFilterChange }) {
   });
 }
 
-export function mountApostilaHandlers({ onSaveDetalhes }) {
-  document.querySelectorAll(".btn-indice-secao").forEach((button) => {
+export function mountApostilaHandlers() {
+  const navButtons = Array.from(document.querySelectorAll(".btn-apostila-nav"));
+  const sections = Array.from(document.querySelectorAll(".apostila-study-section"));
+  const mobileSelect = document.querySelector("#apostila-mobile-select");
+
+  if (!navButtons.length || !sections.length) {
+    return;
+  }
+
+  const setActive = (sectionId) => {
+    navButtons.forEach((button) => {
+      const isActive = String(button.getAttribute("data-section-id") || "") === sectionId;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-current", isActive ? "true" : "false");
+    });
+
+    if (mobileSelect && mobileSelect.value !== sectionId) {
+      mobileSelect.value = sectionId;
+    }
+  };
+
+  const scrollToSection = (sectionId) => {
+    if (!sectionId) {
+      return;
+    }
+
+    const target = document.getElementById(`secao-${sectionId}`);
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActive(sectionId);
+  };
+
+  navButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const targetId = String(button.getAttribute("data-target-id") || "");
-      if (!targetId) {
-        return;
-      }
-
-      const section = document.getElementById(targetId);
-      if (!section) {
-        return;
-      }
-
-      if (section instanceof HTMLDetailsElement) {
-        section.open = true;
-      }
-
-      section.scrollIntoView({ behavior: "smooth", block: "start" });
+      const sectionId = String(button.getAttribute("data-section-id") || "");
+      scrollToSection(sectionId);
     });
   });
 
-  document.querySelectorAll(".form-apostila-detalhes").forEach((form) => {
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const formData = new FormData(form);
-      const techId = String(form.getAttribute("data-tech-id") || "");
-
-      await onSaveDetalhes({
-        techId,
-        significado: String(formData.get("significado") || "").trim(),
-        detalhesExecucao: String(formData.get("detalhesExecucao") || "").trim(),
-        pontosDeAtencao: String(formData.get("pontosDeAtencao") || "").trim(),
-        errosComuns: String(formData.get("errosComuns") || "").trim(),
-        observacoesDoProfessor: String(formData.get("observacoesDoProfessor") || "").trim(),
-      });
+  if (mobileSelect) {
+    mobileSelect.addEventListener("change", () => {
+      scrollToSection(String(mobileSelect.value || ""));
     });
-  });
+  }
+
+  if (typeof window.IntersectionObserver === "function") {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (!visible.length) {
+          return;
+        }
+
+        const sectionId = String(visible[0].target.getAttribute("data-section-id") || "");
+        if (sectionId) {
+          setActive(sectionId);
+        }
+      },
+      {
+        root: null,
+        rootMargin: "-25% 0px -55% 0px",
+        threshold: [0.1, 0.35, 0.65],
+      }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+  }
 }
 
 export function setLoginMessage({ text, type = "error" }) {

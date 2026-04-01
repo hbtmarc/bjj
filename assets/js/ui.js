@@ -31,19 +31,47 @@ function compareByOrdem(left, right) {
 
 function renderDashboard(user, dataState) {
   const metrics = dataState.metrics;
+  const perfil = dataState.perfil || {};
+  const displayName = perfil.nomeCompleto || perfil.nome || user?.email?.split("@")[0] || "atleta";
+  const faixaAtual = perfil.faixaAtual || perfil.faixa || "";
+  const meta = perfil.objetivoPrincipal || "";
+  const treinosAlvo = Number(perfil.frequenciaSemanalDesejada) || 0;
 
   if (dataState.loading.treinos || dataState.loading.progressoApostila) {
     return card(`<p class="page-subtitle">Carregando dados do dashboard...</p>`);
   }
 
+  // Derive current belt from history (fallback to manual perfil fields)
+  const historicoSorted = [...(dataState.historicoGraduacoes || [])].sort((a, b) => (b.dataMs || 0) - (a.dataMs || 0));
+  const latestGrad = historicoSorted[0] || null;
+  const faixaAtualEff = latestGrad?.faixa || faixaAtual;
+  const grauVal = latestGrad ? String(latestGrad.grau ?? "") : String(perfil.grauAtual ?? "");
+  const grauLabel = grauVal === "0" ? "" : grauVal ? `${grauVal}° grau` : "";
+  const faixaCompleta = [faixaAtualEff, grauLabel].filter(Boolean).join(" • ") || "—";
+  const professor = perfil.professor || "";
+  const profFaixa = perfil.professorFaixa || "";
+  const profGrauVal = String(perfil.professorGrau ?? "");
+  const profGrauLabel = profGrauVal === "0" ? "" : profGrauVal ? `${profGrauVal}° grau` : "";
+  const profParts = [professor, profFaixa ? `Faixa ${profFaixa}` : "", profGrauLabel].filter(Boolean);
+  const profLabel = profParts.length ? profParts.join(" • ") : null;
+  const catLabel = perfil.categoriaDePeso || null;
+  const gradInfo = computeGradProgress(dataState.historicoGraduacoes, perfil.proximaMetaGraduacao);
+  const beltColor = BELT_COLORS[faixaAtualEff] || BELT_COLORS._default;
+  const hasContext = Boolean(faixaAtualEff || professor || meta || catLabel || treinosAlvo || gradInfo);
+
+  const ctxChips = [
+    faixaAtualEff ? `<span class="chip">Faixa ${faixaAtualEff}</span>` : "",
+    meta ? `<span class="chip">${meta}</span>` : "",
+  ].filter(Boolean).join("");
+
   return card(`
     <h2 class="page-title">Dashboard</h2>
-    <p class="page-subtitle">Olá, ${user?.email || "atleta"}. Aqui está seu progresso real.</p>
+    <p class="page-subtitle">Olá, <strong>${displayName}</strong>!${ctxChips ? ` <span class="chip-line dash-greeting-chips">${ctxChips}</span>` : " Aqui está seu progresso real."}</p>
 
     <section class="stats-grid">
       <article class="stat-item">
         <h3>Treinos nos últimos 7 dias</h3>
-        <strong>${metrics.treinos7d}</strong>
+        <strong>${metrics.treinos7d}${treinosAlvo ? ` / ${treinosAlvo}` : ""}</strong>
       </article>
       <article class="stat-item">
         <h3>Treinos nos últimos 30 dias</h3>
@@ -75,6 +103,34 @@ function renderDashboard(user, dataState) {
       </article>
     </section>
 
+    ${hasContext ? `
+    <section class="dash-athlete-context">
+      <h3 class="section-title">Contexto do atleta</h3>
+      <div class="stats-grid">
+        <article class="stat-item">
+          <h3>Faixa atual</h3>
+          <strong>${faixaCompleta}</strong>
+          ${latestGrad ? '<span class="muted-text" style="font-size:0.78rem;font-weight:400">Derivado do histórico</span>' : ''}
+        </article>
+        ${profLabel ? `<article class="stat-item"><h3>Professor</h3><strong>${profLabel}</strong></article>` : ""}
+        ${meta ? `<article class="stat-item"><h3>Objetivo</h3><strong>${meta}</strong></article>` : ""}
+        ${catLabel ? `<article class="stat-item"><h3>Categoria de peso</h3><strong>${catLabel}</strong></article>` : ""}
+        ${treinosAlvo ? `<article class="stat-item"><h3>Meta semanal</h3><strong>${treinosAlvo} treinos/sem.</strong></article>` : ""}
+      </div>
+      ${gradInfo ? `
+      <div class="dash-grad-progress">
+        <p class="dash-grad-label">${gradInfo.isOverdue
+          ? "Meta de graduação ultrapassada."
+          : `Progressão até a próxima faixa: ${gradInfo.pct}%${gradInfo.monthsLeft > 0 ? ` — faltam ${gradInfo.monthsLeft} ${gradInfo.monthsLeft === 1 ? "mês" : "meses"}` : " — objetivo próximo!"}`
+        }</p>
+        <div class="grad-progress-wrap" role="progressbar" aria-valuenow="${gradInfo.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progressão para próxima graduação">
+          <div class="grad-progress-bar" style="width:${gradInfo.pct}%;background:${beltColor.bar}"></div>
+        </div>
+      </div>
+      ` : ""}
+    </section>
+    ` : ""}
+
     <div class="split-grid">
       <section>
         <h3 class="section-title">Últimos 3 treinos</h3>
@@ -99,46 +155,610 @@ function renderDashboard(user, dataState) {
   `);
 }
 
-function renderPerfil(dataState, feedback) {
+const CATEGORIAS_PESO = [
+  { valor: "Galo",         label: "Galo (≤ 57,5 kg)" },
+  { valor: "Pluma",        label: "Pluma (≤ 64 kg)" },
+  { valor: "Pena",         label: "Pena (≤ 70 kg)" },
+  { valor: "Leve",         label: "Leve (≤ 76 kg)" },
+  { valor: "Meio-leve",    label: "Meio-leve (≤ 82,3 kg)" },
+  { valor: "Médio",        label: "Médio (≤ 88,3 kg)" },
+  { valor: "Meio-pesado",  label: "Meio-pesado (≤ 94,3 kg)" },
+  { valor: "Pesado",       label: "Pesado (≤ 100,5 kg)" },
+  { valor: "Super-pesado", label: "Super-pesado (+ 100,5 kg)" },
+  { valor: "Pesadíssimo",  label: "Pesadíssimo (Aberto)" },
+];
+
+const FAIXAS_LIST = ["Branca","Cinza","Amarela","Laranja","Verde","Azul","Roxa","Marrom","Preta"];
+const ADULT_BELT_PATH = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
+const YOUTH_BELT_PATH = ["Branca", "Cinza", "Amarela", "Laranja", "Verde", "Azul", "Roxa", "Marrom", "Preta"];
+
+// Belt color palette — add future faixas here
+const BELT_COLORS = {
+  Branca:  { bg: "#ffffff", fg: "#555",    border: "#d1d5db", accent: "#374151", bar: "linear-gradient(90deg,#e5e7eb,#9ca3af)",  cardFrom: "#f9fafb", cardTo: "#f3f4f6" },
+  Cinza:   { bg: "#9ca3af", fg: "#fff",    border: "#6b7280", accent: "#374151", bar: "linear-gradient(90deg,#d1d5db,#6b7280)",  cardFrom: "#f3f4f6", cardTo: "#e5e7eb" },
+  Amarela: { bg: "#fbbf24", fg: "#333",    border: "#f59e0b", accent: "#92400e", bar: "linear-gradient(90deg,#fef3c7,#f59e0b)",  cardFrom: "#fffbeb", cardTo: "#fef3c7" },
+  Laranja: { bg: "#f97316", fg: "#fff",    border: "#ea580c", accent: "#9a3412", bar: "linear-gradient(90deg,#ffedd5,#ea580c)",  cardFrom: "#fff7ed", cardTo: "#ffedd5" },
+  Verde:   { bg: "#22c55e", fg: "#fff",    border: "#16a34a", accent: "#14532d", bar: "linear-gradient(90deg,#dcfce7,#16a34a)",  cardFrom: "#f0fdf4", cardTo: "#dcfce7" },
+  Azul:    { bg: "#3b82f6", fg: "#fff",    border: "#2563eb", accent: "#1d4ed8", bar: "linear-gradient(90deg,#dbeafe,#2563eb)",  cardFrom: "#eff6ff", cardTo: "#dbeafe" },
+  Roxa:    { bg: "#7c3aed", fg: "#fff",    border: "#6d28d9", accent: "#4c1d95", bar: "linear-gradient(90deg,#ede9fe,#6d28d9)",  cardFrom: "#f5f3ff", cardTo: "#ede9fe" },
+  Marrom:  { bg: "#92400e", fg: "#fff",    border: "#78350f", accent: "#451a03", bar: "linear-gradient(90deg,#fde68a,#78350f)",  cardFrom: "#fef3c7", cardTo: "#fde68a" },
+  Preta:   { bg: "#1f2937", fg: "#f9fafb", border: "#111827", accent: "#030712", bar: "linear-gradient(90deg,#e5e7eb,#111827)",  cardFrom: "#f3f4f6", cardTo: "#d1d5db" },
+  _default:{ bg: "#6366f1", fg: "#fff",    border: "#4f46e5", accent: "#3730a3", bar: "linear-gradient(90deg,#e0e7ff,#4f46e5)",  cardFrom: "#f0f4ff", cardTo: "#eef2fb" },
+};
+
+/**
+ * Builds a multi-stop CSS gradient spanning all 9 belt colors in order.
+ * direction: CSS angle string, e.g. "90deg" (horizontal) or "180deg" (vertical)
+ */
+function buildBeltOrderGradient(direction = "90deg", beltPath = FAIXAS_LIST) {
+  const path = beltPath?.length ? beltPath : FAIXAS_LIST;
+  const n = Math.max(1, path.length - 1);
+  const stops = path.map((f, i) => `${BELT_COLORS[f]?.bg || "#ccc"} ${Math.round((i / n) * 100)}%`);
+  return `linear-gradient(${direction}, ${stops.join(", ")})`;
+}
+
+function parseDateOnlyToMs(dateIso) {
+  if (!dateIso) return 0;
+  const parsed = new Date(`${dateIso}T12:00:00`).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function getIdadeAtual(dataNascimento) {
+  const birthMs = parseDateOnlyToMs(dataNascimento);
+  if (!birthMs) return null;
+  const birth = new Date(birthMs);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+}
+
+function getBeltPathByAge(idadeAtual) {
+  if (typeof idadeAtual === "number" && idadeAtual < 18) {
+    return YOUTH_BELT_PATH;
+  }
+  return ADULT_BELT_PATH;
+}
+
+function ensurePathContainsFaixa(path, faixa) {
+  if (!faixa) return [...path];
+  if (path.includes(faixa)) return [...path];
+  return [...path, faixa];
+}
+
+function getNextFaixaFromPath(path, faixaAtual) {
+  const idx = path.indexOf(faixaAtual);
+  if (idx < 0 || idx >= path.length - 1) return "";
+  return path[idx + 1];
+}
+
+function buildPathSegmentGradient(path, fromFaixa, toFaixa, direction = "90deg") {
+  if (!fromFaixa) return buildBeltOrderGradient(direction, path);
+  const fromIdx = path.indexOf(fromFaixa);
+  if (fromIdx < 0) return buildBeltOrderGradient(direction, path);
+  const toIdx = toFaixa ? path.indexOf(toFaixa) : -1;
+  const sliceEnd = toIdx > fromIdx ? toIdx : fromIdx;
+  const segment = path.slice(fromIdx, sliceEnd + 1);
+  if (segment.length <= 1) {
+    const single = BELT_COLORS[fromFaixa]?.bg || BELT_COLORS._default.bg;
+    return `linear-gradient(${direction}, ${single} 0%, ${single} 100%)`;
+  }
+  return buildBeltOrderGradient(direction, segment);
+}
+
+/**
+ * Faixa-cycle bar: 0-80% solid current belt, 80-100% gradient current→next.
+ */
+function buildFaixaCycleGradient(faixaAtual, nextFaixa, direction = "90deg") {
+  const curBg = (BELT_COLORS[faixaAtual] || BELT_COLORS._default).bg;
+  const nxtBg = nextFaixa ? (BELT_COLORS[nextFaixa] || BELT_COLORS._default).bg : curBg;
+  return `linear-gradient(${direction}, ${curBg} 0%, ${curBg} 80%, ${nxtBg} 100%)`;
+}
+
+/**
+ * Stepped vertical gradient for the timeline: one color block per history entry.
+ * Historico is sorted newest-first (top→bottom in the UI).
+ */
+function buildTimelineBlockGradient(historico) {
+  if (!historico || !historico.length) return "transparent";
+  const n = historico.length;
+  const stops = [];
+  historico.forEach((entry, i) => {
+    const bg = (BELT_COLORS[entry.faixa] || BELT_COLORS._default).bg;
+    const s = ((i / n) * 100).toFixed(1);
+    const e = (((i + 1) / n) * 100).toFixed(1);
+    stops.push(`${bg} ${s}%`, `${bg} ${e}%`);
+  });
+  return `linear-gradient(180deg, ${stops.join(", ")})`;
+}
+
+function getHistoricoDateMs(entry) {
+  return Number(entry?.dataMs) || parseDateOnlyToMs(entry?.dataGrad);
+}
+
+function computeTrainingDays(historicoGraduacoes) {
+  const validDatesAsc = [...(historicoGraduacoes || [])]
+    .map((entry) => getHistoricoDateMs(entry))
+    .filter((ms) => ms > 0)
+    .sort((a, b) => a - b);
+
+  if (!validDatesAsc.length) return null;
+
+  const earliestMs = validDatesAsc[0];
+  const currentFaixaStartMs = validDatesAsc[validDatesAsc.length - 1];
+  const startMs = earliestMs || currentFaixaStartMs;
+  if (!startMs) return null;
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const days = Math.max(1, Math.floor((Date.now() - startMs) / dayMs));
+  return { days, startMs };
+}
+
+/**
+ * Derives graduation progress from the history array (single source of truth).
+ * Falls back to auto-estimated timelines when no target date is set.
+ */
+function computeGradProgress(historicoGraduacoes, proximaMetaGraduacao) {
+  const sorted = [...(historicoGraduacoes || [])].sort((a, b) => (b.dataMs || 0) - (a.dataMs || 0));
+  if (!sorted.length) return null;
+
+  const latest = sorted[0];
+  const startMs = getHistoricoDateMs(latest);
+  if (!startMs) return null;
+
+  let endMs = proximaMetaGraduacao ? new Date(proximaMetaGraduacao).getTime() : 0;
+  if (!endMs || endMs <= startMs) {
+    // Auto-estimate months to next graduation per faixa
+    const autoMonths = {
+      Branca: 6, Cinza: 6, Amarela: 8, Laranja: 8, Verde: 10,
+      Azul: 14, Roxa: 20, Marrom: 24, Preta: 36,
+    };
+    const months = autoMonths[latest.faixa] || 12;
+    endMs = startMs + Math.round(months * 30.44 * 24 * 60 * 60 * 1000);
+  }
+
+  const now = Date.now();
+  if (endMs <= startMs) return null;
+
+  const pct = Math.min(100, Math.max(0, Math.round(((now - startMs) / (endMs - startMs)) * 100)));
+  const msLeft = endMs - now;
+  const monthsLeft = Math.max(0, Math.round(msLeft / (30.44 * 24 * 60 * 60 * 1000)));
+  const grauVal = String(latest.grau ?? "");
+  const grauLabel = grauVal === "0" ? "" : grauVal ? `${grauVal}° grau` : "";
+
+  return {
+    pct,
+    monthsLeft,
+    isOverdue: now > endMs,
+    faixa: latest.faixa || "",
+    grauLabel,
+    targetDate: new Date(endMs).toLocaleDateString("pt-BR"),
+  };
+}
+
+function renderPerfil(dataState, feedback, user, uiState) {
   const perfil = dataState.perfil || {};
   const isLoading = dataState.loading.perfil;
+  const secaoAberta = uiState?.perfilSecaoAberta ?? null;
+  const historico = [...(dataState.historicoGraduacoes || [])].sort((a, b) => (b.dataMs || 0) - (a.dataMs || 0));
+  // single source of truth: latest history entry
 
-  if (isLoading && !perfil.nome) {
+  if (isLoading && !perfil.nomeCompleto && !perfil.nome) {
     return card(`
       <h2 class="page-title">Perfil</h2>
       <p class="page-subtitle">Carregando perfil...</p>
     `);
   }
 
+  const displayName = perfil.nomeCompleto || perfil.nome || "";
+  const initials = displayName.split(" ").filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+
+  // Derive current belt from history; fall back to manual perfil fields
+  const latestGrad = historico[0] || null;
+  const faixaAtual = latestGrad?.faixa || perfil.faixaAtual || perfil.faixa || "";
+  const grauAtualVal = latestGrad ? String(latestGrad.grau ?? "") : String(perfil.grauAtual ?? "");
+  const grauAtualNum = Math.max(0, Number(grauAtualVal) || 0);
+  const grauAtualLabel = grauAtualVal === "0" ? "" : grauAtualVal ? `${grauAtualVal}° grau` : "";
+  const faixaChip = [faixaAtual, grauAtualLabel].filter(Boolean).join(" · ") || "—";
+  const beltColor = BELT_COLORS[faixaAtual] || BELT_COLORS._default;
+  const idadeAtual = getIdadeAtual(perfil.dataNascimento);
+  const beltPathBase = getBeltPathByAge(idadeAtual);
+  const beltPath = ensurePathContainsFaixa(beltPathBase, faixaAtual);
+  const nextFaixa = getNextFaixaFromPath(beltPath, faixaAtual);
+  const faixaCycleGradH = buildFaixaCycleGradient(faixaAtual, nextFaixa, "90deg");
+  const tlBlockGrad = buildTimelineBlockGradient(historico);
+  const grauPct = Math.min(80, grauAtualNum * 20);
+  const trainingInfo = computeTrainingDays(historico);
+  const diasTreinandoLabel = trainingInfo
+    ? `${trainingInfo.days} ${trainingInfo.days === 1 ? "dia" : "dias"} treinando`
+    : "—";
+
+  const profFaixa = perfil.professorFaixa || "";
+  const profGrauVal = String(perfil.professorGrau ?? "");
+  const profGrauLabel = profGrauVal === "0" ? "" : profGrauVal ? `${profGrauVal}° grau` : "";
+  const profLine = [perfil.professor, profFaixa ? `Faixa ${profFaixa}` : "", profGrauLabel].filter(Boolean).join(" · ");
+
+  const emailValue = user?.email || "";
+  const gradInfo = computeGradProgress(historico, perfil.proximaMetaGraduacao);
+  const updatedLabel = perfil.updatedAtMs ? `Atualizado em ${formatDateFromMs(perfil.updatedAtMs)}` : "";
+
+  const faixaOptionsList = ensurePathContainsFaixa(beltPath, perfil.faixaAtual || perfil.faixa || "");
+  const faixaOptions = faixaOptionsList
+    .map((f) => `<option value="${f}" ${(perfil.faixaAtual || perfil.faixa || "") === f ? "selected" : ""}>${f}</option>`)
+    .join("");
+
+  const faixaOptProf = FAIXAS_LIST
+    .map((f) => `<option value="${f}" ${profFaixa === f ? "selected" : ""}>${f}</option>`)
+    .join("");
+
+  const grauOptions = [0,1,2,3,4]
+    .map((g) => `<option value="${g}" ${String(perfil.grauAtual) === String(g) ? "selected" : ""}>${g === 0 ? "Sem grau" : g + "° grau"}</option>`)
+    .join("");
+
+  const grauOptProf = [0,1,2,3,4]
+    .map((g) => `<option value="${g}" ${String(perfil.professorGrau) === String(g) ? "selected" : ""}>${g === 0 ? "Sem grau" : g + "° grau"}</option>`)
+    .join("");
+
+  const categoriaOptions = CATEGORIAS_PESO
+    .map(({ valor, label }) => `<option value="${valor}" ${perfil.categoriaDePeso === valor ? "selected" : ""}>${label}</option>`)
+    .join("");
+
+  const objetivoOptions = ["Competir","Defesa pessoal","Saúde e condicionamento","Aprendizado técnico","Socialização"]
+    .map((o) => `<option value="${o}" ${perfil.objetivoPrincipal === o ? "selected" : ""}>${o}</option>`)
+    .join("");
+
+  const grauDots = Array.from({ length: 4 }, (_, i) => {
+    const pos = (i + 1) * 20;
+    const earned = i < grauAtualNum;
+    const cls = earned ? "perfil-belt-grau-dot" : "perfil-belt-grau-dot perfil-belt-grau-dot--future";
+    return `<span class="${cls}" style="left:${pos}%" aria-hidden="true"></span>`;
+  }).join("");
+
+  // ── Featured header belt progression ─────────────────────────
+  const headerGradBar = gradInfo ? `
+    <div class="perfil-belt-prog">
+      <div class="perfil-belt-prog-labels">
+        <span class="perfil-belt-prog-from" style="color:${beltColor.accent}">${faixaAtual || "—"}</span>
+        <span class="perfil-belt-prog-pct">${grauPct}% <small style="font-weight:400;font-size:0.72rem;color:var(--muted)">${grauAtualNum}/4 graus</small></span>
+        ${nextFaixa ? `<span class="perfil-belt-prog-to" style="color:${(BELT_COLORS[nextFaixa]||BELT_COLORS._default).accent}">${nextFaixa}</span>` : `<span class="perfil-belt-prog-to">—</span>`}
+      </div>
+      <div class="perfil-belt-prog-wrap">
+        <div class="perfil-belt-prog-track" role="progressbar"
+            aria-valuenow="${grauPct}" aria-valuemin="0" aria-valuemax="100"
+            aria-label="Progressão para próxima faixa"
+            style="background:${faixaCycleGradH}">
+          <div class="perfil-belt-prog-dim" style="left:${grauPct}%"></div>
+          ${grauDots}
+        </div>
+        <div class="perfil-belt-prog-marker" style="left:${grauPct}%;border-color:${beltColor.border}"></div>
+      </div>
+      <p class="perfil-belt-prog-sub">${gradInfo.isOverdue
+        ? "Meta ultrapassada"
+        : gradInfo.monthsLeft === 0 ? "Objetivo próximo!"
+        : `Faltam ${gradInfo.monthsLeft} ${gradInfo.monthsLeft === 1 ? "mês" : "meses"}`
+      }</p>
+      <p class="perfil-belt-prog-days">${diasTreinandoLabel}</p>
+    </div>
+  ` : "";
+
+  // ── Timeline items ────────────────────────────────────────────
+  const timelineItems = historico.map((entry) => {
+    const eGrau = String(entry.grau ?? "");
+    const eGrauLabel = eGrau === "0" ? "" : eGrau ? `${eGrau}° grau` : "";
+    const eDate = entry.dataGrad ? new Date(entry.dataGrad + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+    const eBelt = BELT_COLORS[entry.faixa] || BELT_COLORS._default;
+    const isPathFaixa = beltPath.includes(entry.faixa);
+    const eDotBg = isPathFaixa ? eBelt.bg : "#cbd5e1";
+    const eDotBorder = isPathFaixa ? eBelt.border : "#94a3b8";
+    const eAccent = isPathFaixa ? eBelt.accent : "#475569";
+    const faixaOptEditList = ensurePathContainsFaixa(beltPath, entry.faixa);
+    const faixaOptEdit = faixaOptEditList.map((f) => `<option value="${f}" ${entry.faixa === f ? "selected" : ""}>${f}</option>`).join("");
+    const grauOptEdit = [0,1,2,3,4].map((g) => `<option value="${g}" ${String(entry.grau) === String(g) ? "selected" : ""}>${g === 0 ? "Sem grau" : g + "° grau"}</option>`).join("");
+    return `
+      <li class="grad-tl-item" style="border-left-color:${eDotBg}">
+        <div class="grad-tl-dot" style="background:${eDotBg};border-color:${eDotBorder};box-shadow:0 0 0 3px ${eDotBg}30,0 1px 4px rgba(0,0,0,0.15)" aria-hidden="true"></div>
+        <div class="grad-tl-body">
+          <div class="grad-tl-row">
+            <div class="grad-tl-info">
+              <strong class="grad-tl-belt" style="color:${eAccent}">${entry.faixa || "—"}${eGrauLabel ? ` · ${eGrauLabel}` : ""}</strong>
+              <span class="grad-tl-date">${eDate}</span>
+              ${entry.observacoes ? `<p class="grad-tl-obs">${entry.observacoes}</p>` : ""}
+            </div>
+            <div class="grad-tl-actions">
+              <button class="ghost-btn btn-edit-grad" type="button" data-grad-id="${entry.id}">Editar</button>
+              <button class="ghost-btn danger-btn btn-del-grad" type="button" data-grad-id="${entry.id}">Remover</button>
+            </div>
+          </div>
+          <form class="grad-tl-edit-form form-grid is-hidden" data-grad-id="${entry.id}" novalidate>
+            <label class="input-label" for="egh-faixa-${entry.id}">Faixa</label>
+            <select class="text-input" id="egh-faixa-${entry.id}" name="faixaEdit" required>
+              <option value="">— selecione —</option>${faixaOptEdit}
+            </select>
+            <label class="input-label" for="egh-grau-${entry.id}">Grau</label>
+            <select class="text-input" id="egh-grau-${entry.id}" name="grauEdit">
+              <option value="">— selecione —</option>${grauOptEdit}
+            </select>
+            <label class="input-label" for="egh-data-${entry.id}">Data</label>
+            <input class="text-input" id="egh-data-${entry.id}" name="dataGradEdit" type="date" value="${entry.dataGrad || ""}" required />
+            <label class="input-label" for="egh-obs-${entry.id}">Observações</label>
+            <textarea class="text-input text-area compact-area" id="egh-obs-${entry.id}" name="obsEdit">${entry.observacoes || ""}</textarea>
+            <div class="perfil-section-save">
+              <button class="primary-btn" type="submit">Salvar alterações</button>
+            </div>
+          </form>
+        </div>
+      </li>`;
+  }).join("");
+
   return card(`
     <h2 class="page-title">Perfil</h2>
-    <p class="page-subtitle">Atualize seus dados para personalizar seu acompanhamento.</p>
     ${formMessage(feedback)}
 
-    <form id="form-perfil" class="form-grid" novalidate>
-      <label class="input-label" for="perfil-nome">Nome</label>
-      <input class="text-input" id="perfil-nome" name="nome" type="text" value="${perfil.nome || ""}" required />
+    <!-- ── Athlete card header ──────────────────────────────── -->
+    <header class="perfil-athlete-card">
+      <div class="perfil-avatar-col">
+        <label class="perfil-avatar-label" for="perfil-avatar-input" title="Alterar foto de perfil">
+          <div class="perfil-avatar" id="perfil-avatar-wrap" style="border-color:${beltColor.border}">
+            <img class="perfil-avatar-img is-hidden" id="perfil-avatar-preview" src="" alt="Foto do atleta" />
+            <span class="perfil-avatar-initials" id="perfil-avatar-initials"
+              style="background:${beltColor.bg};color:${beltColor.fg}">${initials}</span>
+          </div>
+          <input id="perfil-avatar-input" type="file" accept="image/*" class="sr-only" />
+          <span class="perfil-avatar-hint">Alterar foto</span>
+        </label>
+        <button id="btn-remove-avatar" class="ghost-btn danger-btn perfil-remove-avatar is-hidden" type="button">Remover foto</button>
+      </div>
 
-      <label class="input-label" for="perfil-apelido">Apelido</label>
-      <input class="text-input" id="perfil-apelido" name="apelido" type="text" value="${perfil.apelido || ""}" />
+      <div class="perfil-athlete-info">
+        <p class="perfil-display-name">${displayName || '<em class="muted-text">Nome não definido</em>'}</p>
+        ${perfil.apelido ? `<p class="perfil-apelido">&ldquo;${perfil.apelido}&rdquo;</p>` : ""}
+        <p class="perfil-faixa-badge">
+          <span class="perfil-faixa-pill" style="background:${beltColor.bg};color:${beltColor.fg};border:1.5px solid ${beltColor.border};box-shadow:0 1px 3px ${beltColor.bg}66">${faixaChip}</span>
+        </p>
+        ${perfil.academia ? `<p class="perfil-sub"><strong>Academia:</strong> ${perfil.academia}</p>` : ""}
+        ${profLine ? `<p class="perfil-sub perfil-prof-line"><strong>Prof.:</strong> ${profLine}</p>` : ""}
+        ${(perfil.objetivoPrincipal || perfil.categoriaDePeso || perfil.frequenciaSemanalDesejada) ? `
+        <div class="perfil-chip-strip">
+          ${perfil.objetivoPrincipal ? `<span class="chip">${perfil.objetivoPrincipal}</span>` : ""}
+          ${perfil.categoriaDePeso ? `<span class="chip">${perfil.categoriaDePeso}</span>` : ""}
+          ${perfil.frequenciaSemanalDesejada ? `<span class="chip">${perfil.frequenciaSemanalDesejada}×/sem.</span>` : ""}
+        </div>` : ""}
+        <p class="perfil-sub perfil-age-path">
+          <strong>Percurso:</strong> ${typeof idadeAtual === "number" ? `${idadeAtual} anos` : "idade não informada"} · ${typeof idadeAtual === "number" && idadeAtual < 18 ? "Juvenil" : "Adulto"}
+        </p>
+        ${headerGradBar}
+        ${updatedLabel ? `<p class="perfil-updated-label">${updatedLabel}</p>` : ""}
+      </div>
+    </header>
 
-      <label class="input-label" for="perfil-faixa">Faixa</label>
-      <input class="text-input" id="perfil-faixa" name="faixa" type="text" value="${perfil.faixa || ""}" />
+    <!-- ── Editable sections (inside form) ─────────────────── -->
+    <form id="form-perfil" novalidate>
+      <p id="perfil-dirty-hint" class="perfil-dirty-hint is-hidden" role="status" aria-live="polite">Há alterações não salvas nesta seção.</p>
 
-      <label class="input-label" for="perfil-categoria">Categoria de peso</label>
-      <input class="text-input" id="perfil-categoria" name="categoriaDePeso" type="text" value="${perfil.categoriaDePeso || ""}" />
+      <details class="perfil-section" data-secao="identidade" ${secaoAberta === "identidade" ? "open" : ""}>
+        <summary class="perfil-section-title">Identidade do atleta</summary>
+        <div class="perfil-section-body form-grid">
+          <label class="input-label" for="pf-nomeCompleto">Nome completo</label>
+          <input class="text-input" id="pf-nomeCompleto" name="nomeCompleto" type="text" autocomplete="name"
+            value="${perfil.nomeCompleto || perfil.nome || ""}" required />
 
-      <label class="input-label" for="perfil-academia">Academia</label>
-      <input class="text-input" id="perfil-academia" name="academia" type="text" value="${perfil.academia || ""}" />
+          <label class="input-label" for="pf-apelido">Apelido</label>
+          <input class="text-input" id="pf-apelido" name="apelido" type="text" autocomplete="nickname"
+            value="${perfil.apelido || ""}" />
 
-      <label class="input-label" for="perfil-professor">Professor</label>
-      <input class="text-input" id="perfil-professor" name="professor" type="text" value="${perfil.professor || ""}" />
+          <label class="input-label" for="pf-email">E-mail (não editável)</label>
+          <input class="text-input perfil-readonly" id="pf-email" type="email" autocomplete="email"
+            value="${emailValue}" readonly aria-readonly="true" tabindex="-1" />
 
-      <label class="input-label" for="perfil-objetivo">Objetivo</label>
-      <textarea class="text-input text-area" id="perfil-objetivo" name="objetivo">${perfil.objetivo || ""}</textarea>
+          <label class="input-label" for="pf-dataNascimento">Data de nascimento</label>
+          <input class="text-input" id="pf-dataNascimento" name="dataNascimento" type="date" autocomplete="bday"
+            value="${perfil.dataNascimento || ""}" />
 
-      <button class="primary-btn" type="submit">Salvar perfil</button>
+          <label class="input-label" for="pf-cidadeUF">Cidade / UF</label>
+          <input class="text-input" id="pf-cidadeUF" name="cidadeUF" type="text" autocomplete="address-level2"
+            value="${perfil.cidadeUF || ""}" placeholder="Ex: São Paulo, SP" />
+
+          <label class="input-label" for="pf-academia">Academia</label>
+          <input class="text-input" id="pf-academia" name="academia" type="text" autocomplete="organization"
+            value="${perfil.academia || ""}" />
+
+          <label class="input-label" for="pf-professor">Professor</label>
+          <input class="text-input" id="pf-professor" name="professor" type="text"
+            value="${perfil.professor || ""}" />
+
+          <label class="input-label" for="pf-profFaixa">Faixa do professor</label>
+          <select class="text-input" id="pf-profFaixa" name="professorFaixa">
+            <option value="">— selecione —</option>
+            ${faixaOptProf}
+          </select>
+
+          <label class="input-label" for="pf-profGrau">Grau do professor</label>
+          <select class="text-input" id="pf-profGrau" name="professorGrau">
+            <option value="">— selecione —</option>
+            ${grauOptProf}
+          </select>
+
+          <div class="perfil-section-save">
+            <button class="primary-btn" type="submit" name="secao" value="identidade">Salvar identidade</button>
+          </div>
+        </div>
+      </details>
+
+      <details class="perfil-section" data-secao="esportes" ${secaoAberta === "esportes" ? "open" : ""}>
+        <summary class="perfil-section-title">Dados esportivos</summary>
+        <div class="perfil-section-body form-grid">
+          <label class="input-label" for="pf-faixaAtual">Faixa atual <span class="perfil-field-hint">(suplente ao histórico)</span></label>
+          <select class="text-input" id="pf-faixaAtual" name="faixaAtual">
+            <option value="">— selecione —</option>
+            ${faixaOptions}
+          </select>
+
+          <label class="input-label" for="pf-grauAtual">Grau atual <span class="perfil-field-hint">(suplente ao histórico)</span></label>
+          <select class="text-input" id="pf-grauAtual" name="grauAtual">
+            <option value="">— selecione —</option>
+            ${grauOptions}
+          </select>
+
+          <label class="input-label" for="pf-categoriaDePeso">Categoria de peso</label>
+          <select class="text-input" id="pf-categoriaDePeso" name="categoriaDePeso">
+            <option value="">— selecione —</option>
+            ${categoriaOptions}
+          </select>
+
+          <label class="input-label" for="pf-pesoAtual">Peso atual (kg)</label>
+          <input class="text-input" id="pf-pesoAtual" name="pesoAtual" type="number" min="30" max="250" step="0.1"
+            value="${perfil.pesoAtual || ""}" />
+
+          <label class="input-label" for="pf-pesoCompeticao">Peso de competição (kg)</label>
+          <input class="text-input" id="pf-pesoCompeticao" name="pesoCompeticao" type="number" min="30" max="250" step="0.1"
+            value="${perfil.pesoCompeticao || ""}" />
+
+          <label class="input-label" for="pf-ladoDominante">Lado dominante</label>
+          <select class="text-input" id="pf-ladoDominante" name="ladoDominante">
+            <option value="">— selecione —</option>
+            <option value="Destro" ${perfil.ladoDominante === "Destro" ? "selected" : ""}>Destro</option>
+            <option value="Canhoto" ${perfil.ladoDominante === "Canhoto" ? "selected" : ""}>Canhoto</option>
+          </select>
+
+          <label class="input-label" for="pf-estiloPreferido">Estilo preferido</label>
+          <input class="text-input" id="pf-estiloPreferido" name="estiloPreferido" type="text"
+            value="${perfil.estiloPreferido || ""}" placeholder="Ex: Guard player, Passador…" />
+
+          <label class="input-label" for="pf-frequencia">Frequência semanal desejada (treinos)</label>
+          <input class="text-input" id="pf-frequencia" name="frequenciaSemanalDesejada" type="number"
+            min="1" max="14" value="${perfil.frequenciaSemanalDesejada || ""}" />
+
+          <label class="input-label" for="pf-objetivo">Objetivo principal</label>
+          <select class="text-input" id="pf-objetivo" name="objetivoPrincipal">
+            <option value="">— selecione —</option>
+            ${objetivoOptions}
+          </select>
+
+          <label class="input-label" for="pf-proximaMeta">Meta de próxima graduação</label>
+          <input class="text-input" id="pf-proximaMeta" name="proximaMetaGraduacao" type="date"
+            value="${perfil.proximaMetaGraduacao || ""}" />
+
+          <label class="input-label" for="pf-obsEvolucao">Observações de evolução</label>
+          <textarea class="text-input text-area" id="pf-obsEvolucao" name="observacoesDeEvolucao">${perfil.observacoesDeEvolucao || ""}</textarea>
+
+          <div class="perfil-section-save">
+            <button class="primary-btn" type="submit" name="secao" value="esportes">Salvar dados esportivos</button>
+          </div>
+        </div>
+      </details>
+
+      <details class="perfil-section" data-secao="preferencias" ${secaoAberta === "preferencias" ? "open" : ""}>
+        <summary class="perfil-section-title">Preferências e conta</summary>
+        <div class="perfil-section-body">
+          <div class="toggle-list">
+            <div class="toggle-row">
+              <span class="toggle-label">
+                <span class="toggle-label-main">Reduzir animações</span>
+                <span class="toggle-label-sub">Desativa transições e efeitos de movimento</span>
+              </span>
+              <label class="toggle-switch" for="pref-animacoes">
+                <input id="pref-animacoes" name="reduzirAnimacoes" type="checkbox" value="on" ${perfil.reduzirAnimacoes ? "checked" : ""} />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </div>
+
+            <div class="toggle-row">
+              <span class="toggle-label">
+                <span class="toggle-label-main">Perfil público</span>
+                <span class="toggle-label-sub">Em breve — funcionalidade não disponível ainda</span>
+              </span>
+              <label class="toggle-switch" for="pref-publico">
+                <input id="pref-publico" name="resumoPublico" type="checkbox" value="on" disabled ${perfil.resumoPublico ? "checked" : ""} />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="perfil-section-save">
+            <button class="primary-btn" type="submit" name="secao" value="preferencias">Salvar preferências</button>
+          </div>
+
+          <div class="perfil-actions-secondary">
+            <p class="input-label">Ações da conta</p>
+            <button id="btn-perfil-logout" class="ghost-btn danger-btn" type="button">Sair da conta</button>
+          </div>
+        </div>
+      </details>
+
     </form>
+
+    <!-- ── Progression card (read-only, derived from history) ── -->
+    <details class="perfil-section" data-secao="graduacao" ${secaoAberta === "graduacao" ? "open" : ""}>
+      <summary class="perfil-section-title">Progressão de faixa</summary>
+      <div class="perfil-section-body">
+        ${gradInfo ? `
+        <div class="grad-progress-card" style="background:linear-gradient(135deg,${beltColor.cardFrom} 0%,${beltColor.cardTo} 100%);border-color:${beltColor.border}">
+          <div class="grad-progress-card-head">
+            <div>
+              <p class="grad-progress-card-belt" style="color:${beltColor.accent}">${gradInfo.faixa}${gradInfo.grauLabel ? ` · ${gradInfo.grauLabel}` : ""}</p>
+              <p class="grad-progress-card-pct" style="color:${beltColor.accent}">${grauPct}% <small style="font-weight:500;font-size:0.72rem">${grauAtualNum}/4 graus</small></p>
+            </div>
+            <p class="grad-progress-card-sub">${gradInfo.isOverdue
+              ? "Meta ultrapassada — revise a data alvo"
+              : gradInfo.monthsLeft === 0 ? "Objetivo próximo!" : `Faltam ${gradInfo.monthsLeft} ${gradInfo.monthsLeft === 1 ? "mês" : "meses"}`
+            }</p>
+          </div>
+          <div class="grad-progress-wrap grad-progress-path" role="progressbar" aria-valuenow="${grauPct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progressão até próxima graduação" style="background:${faixaCycleGradH}">
+            <div class="grad-progress-dim" style="left:${grauPct}%"></div>
+            ${grauDots}
+            <div class="grad-progress-marker" style="left:${grauPct}%;border-color:${beltColor.border}"></div>
+          </div>
+          <p class="grad-progress-label">Meta: ${gradInfo.targetDate} · ${nextFaixa ? `Próxima faixa: ${nextFaixa}` : "Última faixa da trilha"}</p>
+          <p class="grad-progress-days">${diasTreinandoLabel}</p>
+        </div>
+        ` : `<p class="empty-state">Adicione uma graduação no histórico abaixo para ver a progressão automaticamente.</p>`}
+        <p class="perfil-grad-hint">A progressão é calculada com base no histórico de graduações. Para definir uma meta manual, use "Meta de próxima graduação" em Dados esportivos.</p>
+      </div>
+    </details>
+
+    <!-- ── Graduation timeline ──────────────────────────────── -->
+    <details class="perfil-section" data-secao="historico" ${secaoAberta === "historico" ? "open" : ""}>
+      <summary class="perfil-section-title">Histórico de graduações</summary>
+      <div class="perfil-section-body">
+
+        ${dataState.loading.historicoGraduacoes
+          ? `<p class="empty-state">Carregando histórico...</p>`
+          : historico.length === 0
+            ? `<p class="empty-state">Nenhuma graduação registrada ainda.</p>`
+            : `<ul class="grad-timeline" style="--belt-path-gradient:${tlBlockGrad}">${timelineItems}</ul>`
+        }
+
+        <form id="form-grad-historico" class="form-grid grad-hist-add-form" novalidate>
+          <p class="perfil-section-label">Adicionar graduação</p>
+
+          <label class="input-label" for="gh-faixa">Faixa</label>
+          <select class="text-input" id="gh-faixa" name="faixaGrad" required>
+            <option value="">— selecione —</option>
+            ${beltPath.map((f) => `<option value="${f}">${f}</option>`).join("")}
+          </select>
+
+          <label class="input-label" for="gh-grau">Grau</label>
+          <select class="text-input" id="gh-grau" name="grauGrad">
+            <option value="">— selecione —</option>
+            ${[0,1,2,3,4].map((g) => `<option value="${g}">${g === 0 ? "Sem grau" : g + "° grau"}</option>`).join("")}
+          </select>
+
+          <label class="input-label" for="gh-data">Data da graduação</label>
+          <input class="text-input" id="gh-data" name="dataGrad" type="date" required />
+
+          <label class="input-label" for="gh-obs">Observações</label>
+          <textarea class="text-input text-area compact-area" id="gh-obs" name="obsGrad"></textarea>
+
+          <div class="perfil-section-save">
+            <button class="primary-btn" type="submit">Adicionar entrada</button>
+          </div>
+        </form>
+
+      </div>
+    </details>
   `);
 }
 
@@ -482,7 +1102,7 @@ export function renderRouteView(route, user, dataState, feedbackByRoute, uiState
   }
 
   if (route === "/perfil") {
-    return renderPerfil(dataState, feedbackByRoute.perfil);
+    return renderPerfil(dataState, feedbackByRoute.perfil, user, uiState);
   }
 
   return card(`<p>Página não encontrada.</p>`);
@@ -509,25 +1129,187 @@ export function mountLoginHandlers({ onEmailLogin, onGoogleLogin }) {
   }
 }
 
-export function mountPerfilHandler(onSave) {
-  const form = document.querySelector("#form-perfil");
-  if (!form) {
-    return;
+export function mountPerfilHandler({ onSave, onLogout, onAddGrad, onDeleteGrad, onEditGrad }) {
+  // ── Avatar preview + remove ───────────────────────────
+  const avatarInput = document.querySelector("#perfil-avatar-input");
+  const avatarImg = document.querySelector("#perfil-avatar-preview");
+  const avatarInitials = document.querySelector("#perfil-avatar-initials");
+  const avatarRemoveBtn = document.querySelector("#btn-remove-avatar");
+
+  if (avatarInput && avatarImg && avatarInitials) {
+    avatarInput.addEventListener("change", () => {
+      const file = avatarInput.files?.[0];
+      if (!file) {
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        avatarImg.src = String(e.target?.result || "");
+        avatarImg.classList.remove("is-hidden");
+        avatarInitials.classList.add("is-hidden");
+        if (avatarRemoveBtn) {
+          avatarRemoveBtn.classList.remove("is-hidden");
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formData = new FormData(form);
-    await onSave({
-      nome: String(formData.get("nome") || "").trim(),
-      apelido: String(formData.get("apelido") || "").trim(),
-      faixa: String(formData.get("faixa") || "").trim(),
-      categoriaDePeso: String(formData.get("categoriaDePeso") || "").trim(),
-      academia: String(formData.get("academia") || "").trim(),
-      professor: String(formData.get("professor") || "").trim(),
-      objetivo: String(formData.get("objetivo") || "").trim(),
+  if (avatarRemoveBtn) {
+    avatarRemoveBtn.addEventListener("click", () => {
+      if (avatarImg) {
+        avatarImg.src = "";
+        avatarImg.classList.add("is-hidden");
+      }
+      if (avatarInitials) {
+        avatarInitials.classList.remove("is-hidden");
+      }
+      if (avatarInput) {
+        avatarInput.value = "";
+      }
+      avatarRemoveBtn.classList.add("is-hidden");
+    });
+  }
+
+  // ── Reduce-motion toggle ──────────────────────────────
+  const animacoesToggle = document.querySelector("#pref-animacoes");
+  if (animacoesToggle) {
+    animacoesToggle.addEventListener("change", () => {
+      document.documentElement.classList.toggle("reduce-motion", animacoesToggle.checked);
+    });
+  }
+
+  // ── Logout ────────────────────────────────────────────
+  const logoutBtn = document.querySelector("#btn-perfil-logout");
+  if (logoutBtn && onLogout) {
+    logoutBtn.addEventListener("click", async () => {
+      await onLogout();
+    });
+  }
+
+  // ── Unsaved changes hint ──────────────────────────────
+  const dirtyHint = document.querySelector("#perfil-dirty-hint");
+  const formPerfil = document.querySelector("#form-perfil");
+
+  if (formPerfil && dirtyHint) {
+    const showDirty = () => dirtyHint.classList.remove("is-hidden");
+    formPerfil.addEventListener("input", showDirty);
+    formPerfil.addEventListener("change", showDirty);
+  }
+
+  // ── Main perfil form submit ───────────────────────────
+  if (formPerfil) {
+    formPerfil.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(formPerfil);
+      const secao = String(formData.get("secao") || "").trim() || null;
+      const pesoAtualRaw = formData.get("pesoAtual");
+      const pesoCompRaw = formData.get("pesoCompeticao");
+      const freqRaw = formData.get("frequenciaSemanalDesejada");
+
+      if (dirtyHint) {
+        dirtyHint.classList.add("is-hidden");
+      }
+
+      await onSave(
+        {
+          nomeCompleto: String(formData.get("nomeCompleto") || "").trim(),
+          apelido: String(formData.get("apelido") || "").trim(),
+          dataNascimento: String(formData.get("dataNascimento") || "").trim(),
+          cidadeUF: String(formData.get("cidadeUF") || "").trim(),
+          academia: String(formData.get("academia") || "").trim(),
+          professor: String(formData.get("professor") || "").trim(),
+          professorFaixa: String(formData.get("professorFaixa") || "").trim(),
+          professorGrau: String(formData.get("professorGrau") || "").trim(),
+          faixaAtual: String(formData.get("faixaAtual") || "").trim(),
+          grauAtual: String(formData.get("grauAtual") || "").trim(),
+          categoriaDePeso: String(formData.get("categoriaDePeso") || "").trim(),
+          pesoAtual: pesoAtualRaw !== "" && pesoAtualRaw !== null ? Number(pesoAtualRaw) : "",
+          pesoCompeticao: pesoCompRaw !== "" && pesoCompRaw !== null ? Number(pesoCompRaw) : "",
+          ladoDominante: String(formData.get("ladoDominante") || "").trim(),
+          estiloPreferido: String(formData.get("estiloPreferido") || "").trim(),
+          frequenciaSemanalDesejada: freqRaw !== "" && freqRaw !== null ? Number(freqRaw) : "",
+          objetivoPrincipal: String(formData.get("objetivoPrincipal") || "").trim(),
+          proximaMetaGraduacao: String(formData.get("proximaMetaGraduacao") || "").trim(),
+          observacoesDeEvolucao: String(formData.get("observacoesDeEvolucao") || "").trim(),
+          reduzirAnimacoes: formData.get("reduzirAnimacoes") === "on",
+          resumoPublico: formData.get("resumoPublico") === "on",
+        },
+        secao
+      );
+    });
+  }
+
+  // ── Graduation history add form ───────────────────────
+  const formGradHist = document.querySelector("#form-grad-historico");
+  if (formGradHist && onAddGrad) {
+    formGradHist.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const formData = new FormData(formGradHist);
+      const faixaGrad = String(formData.get("faixaGrad") || "").trim();
+      const dataGrad = String(formData.get("dataGrad") || "").trim();
+
+      if (!faixaGrad || !dataGrad) {
+        return;
+      }
+
+      await onAddGrad({
+        faixa: faixaGrad,
+        grau: String(formData.get("grauGrad") || "").trim(),
+        dataGrad,
+        observacoes: String(formData.get("obsGrad") || "").trim(),
+      });
+
+      formGradHist.reset();
+    });
+  }
+
+  // ── Graduation history delete ─────────────────────────
+  document.querySelectorAll(".btn-del-grad").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const gradId = String(btn.getAttribute("data-grad-id") || "");
+      if (!gradId) {
+        return;
+      }
+      const ok = window.confirm("Remover esta entrada do histórico de graduações?");
+      if (!ok) {
+        return;
+      }
+      await onDeleteGrad(gradId);
     });
   });
+
+  // ── Graduation history inline edit (toggle) ───────────
+  document.querySelectorAll(".btn-edit-grad").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const gradId = String(btn.getAttribute("data-grad-id") || "");
+      const editForm = document.querySelector(`.grad-tl-edit-form[data-grad-id="${gradId}"]`);
+      if (!editForm) return;
+      const isHidden = editForm.classList.toggle("is-hidden");
+      btn.textContent = isHidden ? "Editar" : "Cancelar";
+    });
+  });
+
+  // ── Graduation history inline edit (submit) ───────────
+  if (onEditGrad) {
+    document.querySelectorAll(".grad-tl-edit-form").forEach((form) => {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const gradId = String(form.getAttribute("data-grad-id") || "");
+        if (!gradId) return;
+        const fd = new FormData(form);
+        const faixaEdit = String(fd.get("faixaEdit") || "").trim();
+        const dataEdit = String(fd.get("dataGradEdit") || "").trim();
+        if (!faixaEdit || !dataEdit) return;
+        await onEditGrad(gradId, {
+          faixa: faixaEdit,
+          grau: String(fd.get("grauEdit") || "").trim(),
+          dataGrad: dataEdit,
+          observacoes: String(fd.get("obsEdit") || "").trim(),
+        });
+      });
+    });
+  }
 }
 
 export function mountTreinoHandlers({ onSave, onStartEdit, onCancelEdit, onDelete }) {

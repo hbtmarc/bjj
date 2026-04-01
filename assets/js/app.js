@@ -32,6 +32,7 @@ const state = {
     perfil: null,
     treinos: [],
     progressoApostila: {},
+    historicoGraduacoes: [],
     apostilaItemsComProgresso: [],
     apostilaSections,
     tecnicasFiltradas: [],
@@ -50,6 +51,7 @@ const state = {
       perfil: false,
       treinos: false,
       progressoApostila: false,
+      historicoGraduacoes: false,
     },
   },
   ui: {
@@ -57,6 +59,7 @@ const state = {
     filtroTecnicaTexto: "",
     filtroTecnicaCategoria: "",
     filtroSomenteFavoritas: false,
+    perfilSecaoAberta: null,
   },
   feedback: {
     perfil: { text: "", type: "success" },
@@ -305,12 +308,30 @@ async function ensureDefaultPerfil(user) {
   const nomePadrao = user.displayName || user.email?.split("@")[0] || "Atleta";
   await set(perfilRef, {
     nome: nomePadrao,
+    nomeCompleto: nomePadrao,
     apelido: "",
     faixa: "",
+    faixaAtual: "",
+    grauAtual: "",
     categoriaDePeso: "",
+    pesoAtual: "",
+    pesoCompeticao: "",
+    ladoDominante: "",
+    estiloPreferido: "",
+    frequenciaSemanalDesejada: "",
+    objetivoPrincipal: "",
     academia: "",
     professor: "",
+    professorFaixa: "",
+    professorGrau: "",
+    dataNascimento: "",
+    cidadeUF: "",
+    dataUltimaGraduacao: "",
+    proximaMetaGraduacao: "",
+    observacoesDeEvolucao: "",
     objetivo: "",
+    reduzirAnimacoes: false,
+    resumoPublico: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdAtMs: now,
@@ -322,21 +343,37 @@ function bindRealtimeData(user) {
   const perfilRef = ref(db, `users/${user.uid}/perfil`);
   const treinosRef = ref(db, `users/${user.uid}/treinos`);
   const progressoRef = ref(db, `users/${user.uid}/progressoApostila`);
+  const historicoRef = ref(db, `users/${user.uid}/historicoGraduacoes`);
 
   setLoading("perfil", true);
   setLoading("treinos", true);
   setLoading("progressoApostila", true);
+  setLoading("historicoGraduacoes", true);
 
   const stopPerfil = onValue(
     perfilRef,
     (snapshot) => {
       state.data.perfil = snapshot.val() || null;
       setLoading("perfil", false);
+      document.documentElement.classList.toggle("reduce-motion", Boolean(state.data.perfil?.reduzirAnimacoes));
       rerender();
     },
     () => {
       setLoading("perfil", false);
       setRouteFeedback("perfil", "Falha ao carregar perfil.", "error");
+      rerender();
+    }
+  );
+
+  const stopHistorico = onValue(
+    historicoRef,
+    (snapshot) => {
+      state.data.historicoGraduacoes = parseCollection(snapshot.val());
+      setLoading("historicoGraduacoes", false);
+      rerender();
+    },
+    () => {
+      setLoading("historicoGraduacoes", false);
       rerender();
     }
   );
@@ -373,7 +410,7 @@ function bindRealtimeData(user) {
     }
   );
 
-  state.listeners = [stopPerfil, stopTreinos, stopProgresso];
+  state.listeners = [stopPerfil, stopHistorico, stopTreinos, stopProgresso];
 }
 
 function resetPrivateData() {
@@ -381,6 +418,7 @@ function resetPrivateData() {
   state.data.perfil = null;
   state.data.treinos = [];
   state.data.progressoApostila = {};
+  state.data.historicoGraduacoes = [];
   state.data.apostilaItemsComProgresso = [];
   state.data.tecnicasFiltradas = [];
   state.data.metrics = {
@@ -398,12 +436,14 @@ function resetPrivateData() {
     perfil: false,
     treinos: false,
     progressoApostila: false,
+    historicoGraduacoes: false,
   };
   state.ui = {
     treinoEmEdicao: null,
     filtroTecnicaTexto: "",
     filtroTecnicaCategoria: "",
     filtroSomenteFavoritas: false,
+    perfilSecaoAberta: null,
   };
   clearRouteFeedback("perfil");
   clearRouteFeedback("treinos");
@@ -588,6 +628,78 @@ function handleTecnicaFilterChange({ texto, categoria, somenteFavoritas }) {
   rerender();
 }
 
+async function saveGraduacaoHistorico(payload) {
+  if (!state.user) {
+    return;
+  }
+
+  const dataMs = payload.dataGrad ? new Date(payload.dataGrad + "T12:00:00").getTime() : 0;
+  const now = Date.now();
+  const historicoRef = ref(db, `users/${state.user.uid}/historicoGraduacoes`);
+
+  try {
+    const entryRef = push(historicoRef);
+    await set(entryRef, {
+      faixa: String(payload.faixa || ""),
+      grau: String(payload.grau || ""),
+      dataGrad: String(payload.dataGrad || ""),
+      dataMs,
+      observacoes: String(payload.observacoes || ""),
+      createdAtMs: now,
+    });
+    state.ui.perfilSecaoAberta = "historico";
+    setRouteFeedback("perfil", "Entrada de graduação adicionada.", "success");
+  } catch {
+    setRouteFeedback("perfil", "Erro ao salvar entrada de graduação.", "error");
+  }
+
+  rerender();
+}
+
+async function deleteGraduacaoHistorico(id) {
+  if (!state.user || !id) {
+    return;
+  }
+
+  try {
+    const entryRef = ref(db, `users/${state.user.uid}/historicoGraduacoes/${id}`);
+    await set(entryRef, null);
+    state.ui.perfilSecaoAberta = "historico";
+    setRouteFeedback("perfil", "Entrada removida do histórico.", "success");
+  } catch {
+    setRouteFeedback("perfil", "Erro ao remover entrada.", "error");
+  }
+
+  rerender();
+}
+
+async function updateGraduacaoHistorico(id, payload) {
+  if (!state.user || !id) {
+    return;
+  }
+
+  const dataMs = payload.dataGrad ? new Date(payload.dataGrad + "T12:00:00").getTime() : 0;
+  const now = Date.now();
+
+  try {
+    const entryRef = ref(db, `users/${state.user.uid}/historicoGraduacoes/${id}`);
+    await update(entryRef, {
+      faixa: String(payload.faixa || ""),
+      grau: String(payload.grau || ""),
+      dataGrad: String(payload.dataGrad || ""),
+      dataMs,
+      observacoes: String(payload.observacoes || ""),
+      updatedAtMs: now,
+    });
+    state.ui.perfilSecaoAberta = "historico";
+    setRouteFeedback("perfil", "Graduação atualizada com sucesso.", "success");
+  } catch {
+    setRouteFeedback("perfil", "Erro ao atualizar graduação.", "error");
+  }
+
+  rerender();
+}
+
 function renderRoute(route, user) {
   state.route = route;
   if (!view) {
@@ -621,31 +733,45 @@ function renderRoute(route, user) {
   }
 
   if (route === "/perfil") {
-    mountPerfilHandler(async (payload) => {
-      if (!state.user) {
-        return;
-      }
+    mountPerfilHandler({
+      onSave: async (payload, secao) => {
+        if (!state.user) {
+          return;
+        }
 
-      if (!payload.nome) {
-        setRouteFeedback("perfil", "Nome é obrigatório.", "error");
+        if (!payload.nomeCompleto) {
+          setRouteFeedback("perfil", "Nome completo é obrigatório.", "error");
+          rerender();
+          return;
+        }
+
+        if (secao) {
+          state.ui.perfilSecaoAberta = secao;
+        }
+
+        try {
+          const now = Date.now();
+          const perfilRef = ref(db, `users/${state.user.uid}/perfil`);
+          await update(perfilRef, {
+            ...payload,
+            nome: payload.nomeCompleto,
+            faixa: payload.faixaAtual,
+            updatedAt: serverTimestamp(),
+            updatedAtMs: now,
+          });
+          setRouteFeedback("perfil", "Perfil salvo com sucesso.", "success");
+        } catch {
+          setRouteFeedback("perfil", "Não foi possível salvar o perfil.", "error");
+        }
+
         rerender();
-        return;
-      }
-
-      try {
-        const now = Date.now();
-        const perfilRef = ref(db, `users/${state.user.uid}/perfil`);
-        await update(perfilRef, {
-          ...payload,
-          updatedAt: serverTimestamp(),
-          updatedAtMs: now,
-        });
-        setRouteFeedback("perfil", "Perfil salvo com sucesso.", "success");
-      } catch {
-        setRouteFeedback("perfil", "Não foi possível salvar o perfil.", "error");
-      }
-
-      rerender();
+      },
+      onLogout: async () => {
+        await logoutUser();
+      },
+      onAddGrad: saveGraduacaoHistorico,
+      onDeleteGrad: deleteGraduacaoHistorico,
+      onEditGrad: updateGraduacaoHistorico,
     });
   }
 

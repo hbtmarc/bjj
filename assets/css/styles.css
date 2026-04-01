@@ -9,7 +9,18 @@
   --border: #e5e7eb;
   --success: #1f9d55;
   --danger: #d14343;
+  --radius-sm: 0.6rem;
+  --radius-md: 0.8rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+  --space-1: 0.35rem;
+  --space-2: 0.55rem;
+  --space-3: 0.8rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
   --shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+  --shadow-soft: 0 2px 10px rgba(16, 24, 40, 0.05);
+  --focus-ring: 0 0 0 2px rgba(31, 58, 138, 0.18);
 }
 
 * {
@@ -44,7 +55,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1rem;
+  padding: 0.85rem var(--space-4);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -60,13 +71,14 @@ body {
 .google-btn,
 .nav-link {
   border: 0;
-  border-radius: 0.7rem;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font: inherit;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .ghost-btn {
-  padding: 0.55rem 0.8rem;
+  padding: 0.52rem 0.82rem;
   background: transparent;
   color: var(--primary);
 }
@@ -77,17 +89,17 @@ body {
 
 .main-view {
   flex: 1;
-  width: min(900px, 100%);
+  width: min(920px, 100%);
   margin: 0 auto;
-  padding: 1rem 1rem 5.5rem;
+  padding: var(--space-4) var(--space-4) 5.5rem;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 1rem;
-  box-shadow: var(--shadow);
-  padding: 1rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-4);
 }
 
 .login-wrap {
@@ -107,7 +119,7 @@ body {
 
 .form-grid {
   display: grid;
-  gap: 0.7rem;
+  gap: var(--space-2);
 }
 
 .input-label {
@@ -118,14 +130,17 @@ body {
 .text-input {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 0.7rem;
-  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius-md);
+  padding: 0.64rem 0.78rem;
+  min-height: 2.4rem;
   font: inherit;
   background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .text-input:focus {
-  outline: 2px solid rgba(31, 58, 138, 0.2);
+  outline: none;
+  box-shadow: var(--focus-ring);
   border-color: var(--primary);
 }
 
@@ -135,7 +150,7 @@ body {
 }
 
 .primary-btn {
-  padding: 0.75rem 0.9rem;
+  padding: 0.7rem 0.95rem;
   background: var(--primary);
   color: #fff;
   font-weight: 600;
@@ -145,8 +160,19 @@ body {
   background: var(--primary-strong);
 }
 
+.primary-btn:focus-visible,
+.ghost-btn:focus-visible,
+.google-btn:focus-visible,
+.nav-link:focus-visible,
+.index-pill:focus-visible,
+.apostila-row-summary:focus-visible,
+.selector-group summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .google-btn {
-  padding: 0.75rem 0.9rem;
+  padding: 0.68rem 0.92rem;
   background: var(--surface-soft);
   color: var(--text);
   font-weight: 600;
@@ -167,8 +193,8 @@ body {
 
 .message {
   margin: 0;
-  border-radius: 0.7rem;
-  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.74rem;
   font-size: 0.9rem;
 }
 
@@ -188,21 +214,21 @@ body {
 }
 
 .section-title {
-  margin: 1.2rem 0 0.7rem;
+  margin: 1rem 0 var(--space-2);
   font-size: 1rem;
 }
 
 .stats-grid {
   display: grid;
-  gap: 0.7rem;
+  gap: var(--space-2);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .stat-item {
   background: var(--surface-soft);
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  padding: 0.7rem;
+  border-radius: var(--radius-md);
+  padding: 0.68rem;
 }
 
 .stat-item h3 {
@@ -217,8 +243,8 @@ body {
 
 .split-grid {
   display: grid;
-  gap: 0.8rem;
-  margin-top: 1rem;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .simple-list {
@@ -232,14 +258,20 @@ body {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .entity-item {
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  padding: 0.7rem;
   background: #fff;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.entity-item:hover {
+  border-color: #d8dde6;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);
 }
 
 .entity-item p {
@@ -256,11 +288,11 @@ body {
 
 .check-list {
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border-radius: var(--radius-md);
   background: #fff;
-  padding: 0.65rem;
+  padding: 0.62rem;
   display: grid;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .compact-check-list {
@@ -276,14 +308,14 @@ body {
 
 .selector-group-list {
   display: grid;
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 
 .selector-group {
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
+  border-radius: var(--radius-md);
   background: #fff;
-  padding: 0.45rem 0.65rem;
+  padding: 0.42rem 0.62rem;
 }
 
 .selector-group summary {
@@ -307,7 +339,7 @@ body {
 
 .actions-row {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -324,35 +356,44 @@ body {
 .chip {
   border: 1px solid var(--border);
   background: var(--surface-soft);
-  border-radius: 999px;
-  padding: 0.15rem 0.55rem;
-  font-size: 0.78rem;
+  border-radius: var(--radius-pill);
+  padding: 0.14rem 0.52rem;
+  font-size: 0.76rem;
   color: var(--muted);
 }
 
 .filter-row {
-  margin-top: 1rem;
+  margin-top: var(--space-4);
   display: grid;
-  gap: 0.65rem;
+  gap: var(--space-2);
 }
 
 .apostila-section {
   margin-top: 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 0.9rem;
+  border-radius: var(--radius-lg);
   background: #fff;
-  padding: 0.35rem 0.55rem 0.55rem;
+  padding: 0.35rem 0.55rem 0.6rem;
 }
 
 .apostila-section-summary {
   cursor: pointer;
   list-style: none;
   margin: 0;
-  padding: 0.55rem 0.6rem;
-  border-radius: 0.65rem;
+  padding: 0.52rem 0.64rem;
+  border-radius: var(--radius-md);
   background: var(--surface-soft);
   color: var(--text);
   font-weight: 700;
+  transition: background 0.15s ease;
+}
+
+.apostila-section-summary:hover {
+  background: #eaedf4;
+}
+
+.apostila-section > .entity-list {
+  margin-top: var(--space-3);
 }
 
 .apostila-section-summary::-webkit-details-marker {
@@ -362,15 +403,15 @@ body {
 .apostila-topbar {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 0.65rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .topbar-item {
   border: 1px solid var(--border);
-  border-radius: 0.65rem;
+  border-radius: var(--radius-md);
   background: #fbfcff;
-  padding: 0.45rem 0.55rem;
+  padding: 0.44rem 0.56rem;
   display: grid;
   gap: 0.12rem;
 }
@@ -391,9 +432,9 @@ body {
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(3px);
   border: 1px solid var(--border);
-  border-radius: 0.7rem;
-  padding: 0.35rem;
-  margin-bottom: 0.7rem;
+  border-radius: var(--radius-md);
+  padding: 0.34rem;
+  margin-bottom: var(--space-3);
   display: flex;
   gap: 0.35rem;
   overflow-x: auto;
@@ -403,7 +444,7 @@ body {
   white-space: nowrap;
   border: 1px solid var(--border);
   background: #f9fafc;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #5d6472;
   padding: 0.28rem 0.58rem;
   font-size: 0.75rem;
@@ -412,12 +453,12 @@ body {
 .apostila-row {
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 0.72rem;
+  border-radius: var(--radius-md);
   background: #fff;
 }
 
 .apostila-item-disclosure {
-  border-radius: 0.72rem;
+  border-radius: var(--radius-md);
 }
 
 .apostila-item-disclosure[open] {
@@ -429,10 +470,10 @@ body {
   cursor: pointer;
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.55rem;
+  gap: var(--space-2);
   align-items: center;
-  padding: 0.48rem 0.58rem;
-  border-radius: 0.72rem;
+  padding: 0.5rem 0.62rem;
+  border-radius: var(--radius-md);
   transition: background 0.15s ease;
 }
 
@@ -447,7 +488,7 @@ body {
 .apostila-row-left {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.55rem;
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -467,7 +508,7 @@ body {
 .apostila-row-right {
   display: grid;
   justify-items: end;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .apostila-badges {
@@ -481,7 +522,7 @@ body {
   font-size: 0.76rem;
   color: var(--primary);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.12rem 0.45rem;
 }
 
@@ -492,9 +533,9 @@ body {
 .details-panel {
   margin-top: 0;
   border-top: 1px dashed var(--border);
-  padding: 0.62rem;
+  padding: 0.68rem;
   background: #fafbfe;
-  border-radius: 0 0 0.72rem 0.72rem;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
 .apostila-detail-panel {
@@ -508,11 +549,11 @@ body {
 }
 
 .dense-tech-list {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .dense-tech-item {
-  padding: 0.65rem;
+  padding: 0.62rem;
 }
 
 .dense-head {
@@ -531,12 +572,12 @@ body {
 
 .dense-controls {
   display: grid;
-  gap: 0.45rem;
+  gap: var(--space-1);
 }
 
 .compact-input {
   max-width: 110px;
-  padding: 0.45rem 0.55rem;
+  padding: 0.42rem 0.54rem;
 }
 
 .compact-area {
@@ -565,12 +606,12 @@ body {
 }
 
 .page-title {
-  margin: 0 0 0.5rem;
+  margin: 0 0 var(--space-2);
   font-size: 1.2rem;
 }
 
 .page-subtitle {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-4);
   color: var(--muted);
 }
 
@@ -589,15 +630,15 @@ body {
   border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  padding: 0.45rem;
-  gap: 0.35rem;
+  padding: 0.4rem;
+  gap: var(--space-1);
 }
 
 .nav-link {
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  min-height: 2.5rem;
+  min-height: 2.4rem;
   text-decoration: none;
   color: var(--muted);
   font-weight: 600;
@@ -613,13 +654,719 @@ body {
   display: none !important;
 }
 
+/* ── Accessibility helpers ──────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Reduce-motion preference ───────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+html.reduce-motion * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ── Perfil avatar column ────────────────────────────────── */
+.perfil-avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.perfil-remove-avatar {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+}
+
+/* ── Prof line in header ─────────────────────────────────── */
+.perfil-prof-line {
+  font-size: 0.82rem;
+}
+
+/* ── Perfil last-updated label ───────────────────────────── */
+.perfil-updated-label {
+  margin: 0.3rem 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* ── Unsaved changes hint ────────────────────────────────── */
+.perfil-dirty-hint {
+  margin: 0 0 var(--space-2);
+  padding: 0.44rem 0.7rem;
+  border-radius: var(--radius-md);
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  color: #92660a;
+  font-size: 0.86rem;
+}
+
+/* ── Perfil section label (inside grad history add form) ─── */
+.perfil-section-label {
+  margin: var(--space-2) 0 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ── Graduation progress card ────────────────────────────── */
+.grad-progress-card {
+  background: linear-gradient(135deg, #f0f4ff 0%, #eef2fb 100%);
+  border: 1px solid #d6dff5;
+  border-radius: var(--radius-md);
+  padding: 0.7rem 0.85rem 0.65rem;
+  margin-bottom: var(--space-1);
+}
+
+.grad-progress-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 0.4rem;
+}
+
+.grad-progress-card-pct {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.grad-progress-card-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ── Dashboard athlete context section ───────────────────── */
+.dash-athlete-context {
+  margin-top: var(--space-4);
+}
+
+.dash-grad-progress {
+  margin-top: var(--space-3);
+}
+
+.dash-grad-label {
+  margin: 0 0 0.38rem;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+/* ── Graduation history list ─────────────────────────────── */
+.grad-hist-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.grad-hist-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.72rem;
+  background: #fff;
+}
+
+.grad-hist-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.grad-hist-date {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.grad-hist-obs {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.grad-hist-add-form {
+  border-top: 1px dashed var(--border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+/* ── Featured header belt progression component ──────────── */
+.perfil-belt-prog {
+  margin-top: var(--space-3);
+  width: 100%;
+}
+
+.perfil-belt-prog-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  gap: var(--space-2);
+}
+
+.perfil-belt-prog-from {
+  font-weight: 700;
+}
+
+.perfil-belt-prog-pct {
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.perfil-belt-prog-to {
+  font-weight: 600;
+  text-align: right;
+}
+
+.perfil-belt-prog-wrap {
+  position: relative;
+  padding: 0.42rem 0;
+}
+
+.perfil-belt-prog-track {
+  height: 0.7rem;
+  border-radius: var(--radius-pill);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.perfil-belt-prog-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(255,255,255,0.62);
+  backdrop-filter: none;
+}
+
+.perfil-belt-prog-marker {
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #fff;
+  border: 2.5px solid #888;
+  transform: translate(-50%, -50%);
+  top: 50%;
+  z-index: 2;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.22);
+  pointer-events: none;
+}
+
+.perfil-belt-grau-dot {
+  position: absolute;
+  top: 50%;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: #111827;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.9);
+}
+
+.perfil-belt-grau-dot--future {
+  background: transparent;
+  border: 1.5px solid rgba(0,0,0,0.25);
+  box-shadow: none;
+}
+
+.perfil-belt-prog-sub {
+  margin: 0.22rem 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.perfil-belt-prog-days {
+  margin: 0.12rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text);
+  text-align: center;
+  font-weight: 600;
+}
+
+/* ── Progress card belt line ───────────────────────── */
+.grad-progress-card-belt {
+  margin: 0 0 0.1rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Progress section hint + field hint ──────────────── */
+.perfil-grad-hint,
+.perfil-field-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.perfil-grad-hint {
+  display: block;
+  margin-top: var(--space-2);
+  line-height: 1.4;
+}
+
+/* ── Graduation timeline ───────────────────────────── */
+.grad-timeline {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  position: relative;
+}
+
+.grad-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  width: 2px;
+  background: var(--belt-path-gradient, linear-gradient(180deg, #ffffff 0%, #1f2937 100%));
+  border-radius: 1px;
+  opacity: 0.7;
+}
+
+.grad-tl-item {
+  display: flex;
+  gap: var(--space-3);
+  position: relative;
+  padding-bottom: var(--space-3);
+  border-left: 2px solid transparent;
+  margin-left: 0.6rem;
+  padding-left: 0.5rem;
+}
+
+.grad-tl-item:last-child {
+  padding-bottom: 0;
+}
+
+.grad-tl-dot {
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 2.5px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  margin-left: -1.28rem;
+  position: relative;
+  z-index: 1;
+  transition: box-shadow 0.15s ease;
+}
+
+.grad-tl-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.grad-tl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.grad-tl-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.grad-tl-belt {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.grad-tl-date {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.grad-tl-obs {
+  margin: 0.12rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.grad-tl-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.grad-tl-edit-form {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-2) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+}
+
+/* ── Dashboard context section ───────────────────────────── */
+
+.dash-greeting-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  vertical-align: middle;
+}
+
+/* ── Perfil header / athlete card ────────────────────────────── */
+.perfil-header,
+.perfil-athlete-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.perfil-avatar-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.perfil-avatar {
+  width: 5.2rem;
+  height: 5.2rem;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 3px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.13);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.perfil-avatar-label:hover .perfil-avatar {
+  border-color: var(--primary);
+}
+
+.perfil-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.perfil-avatar-initials {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  user-select: none;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary); /* fallback; overridden by inline style for belt colors */
+}
+
+.perfil-avatar-hint {
+  font-size: 0.72rem;
+  color: var(--primary);
+}
+
+.perfil-header-info,
+.perfil-athlete-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.perfil-display-name {
+  margin: 0 0 0.15rem;
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.perfil-apelido {
+  margin: 0 0 0.2rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.perfil-faixa-badge {
+  margin: 0 0 0.3rem;
+  line-height: 1;
+}
+
+.perfil-faixa-pill {
+  display: inline-block;
+  padding: 0.25em 0.75em;
+  border-radius: var(--radius-pill);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.perfil-sub {
+  margin: 0 0 0.35rem;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.perfil-age-path {
+  margin-top: var(--space-2);
+  font-size: 0.79rem;
+}
+
+.perfil-chip-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.muted-text {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Perfil sections ────────────────────────────────────────── */
+.perfil-section {
+  margin-top: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 0.25rem 0.55rem 0.55rem;
+}
+
+.perfil-section-title {
+  cursor: pointer;
+  list-style: none;
+  margin: 0;
+  padding: 0.54rem 0.6rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-soft);
+  transition: background 0.15s ease;
+}
+
+.perfil-section-title::-webkit-details-marker {
+  display: none;
+}
+
+.perfil-section-title:hover {
+  background: #eaedf4;
+}
+
+.perfil-section-body {
+  padding-top: var(--space-3);
+}
+
+.perfil-section-save {
+  margin-top: var(--space-2);
+}
+
+.perfil-readonly {
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: default;
+}
+
+/* ── Graduation progress bar ────────────────────────────────── */
+.grad-progress-wrap {
+  height: 0.55rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.grad-progress-path {
+  height: 0.75rem;
+  position: relative;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.grad-progress-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(255,255,255,0.62);
+}
+
+.grad-progress-marker {
+  position: absolute;
+  width: 0.95rem;
+  height: 0.95rem;
+  top: 50%;
+  border-radius: 50%;
+  border: 2px solid #64748b;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.grad-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #3b5fd8);
+  border-radius: var(--radius-pill);
+  transition: width 0.4s ease;
+}
+
+.grad-progress-label {
+  margin: 0.28rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.grad-progress-days {
+  margin: 0.18rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── Toggle switch ──────────────────────────────────────────── */
+.toggle-list {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.toggle-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.toggle-label-main {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.toggle-label-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  width: 2.4rem;
+  height: 1.35rem;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-track {
+  background: var(--primary);
+}
+
+.toggle-switch input:disabled + .toggle-track {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toggle-switch input:focus-visible + .toggle-track {
+  box-shadow: var(--focus-ring);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 0.175rem;
+  left: 0.175rem;
+  width: 1rem;
+  height: 1rem;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(1.05rem);
+}
+
+/* ── Perfil secondary actions ───────────────────────────────── */
+.perfil-actions-secondary {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
 @media (min-width: 768px) {
   .top-header {
     padding: 1rem 1.25rem;
   }
 
   .main-view {
-    padding: 1.5rem 1.25rem 6rem;
+    padding: 1.35rem 1.25rem 6rem;
   }
 
   .card {

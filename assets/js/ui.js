@@ -29,6 +29,69 @@ function formMessage(flash) {
   return `<p class="message ${flash.type || "success"}">${flash.text}</p>`;
 }
 
+const ALLOWED_AVATAR_TYPES = new Set(["image/jpeg", "image/jpg", "image/png"]);
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(String(event.target?.result || ""));
+    reader.onerror = () => reject(new Error("Falha ao ler a imagem."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Falha ao processar a imagem."));
+    img.src = dataUrl;
+  });
+}
+
+async function optimizeAvatarImage(file) {
+  if (!file || !ALLOWED_AVATAR_TYPES.has(file.type)) {
+    throw new Error("Formato inválido. Use JPG, JPEG ou PNG.");
+  }
+
+  const dataUrl = await readFileAsDataURL(file);
+  const img = await loadImage(dataUrl);
+
+  const MAX_SIDE = 1024;
+  const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+  const width = Math.max(1, Math.round(img.width * scale));
+  const height = Math.max(1, Math.round(img.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Não foi possível otimizar a imagem.");
+  }
+
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (outBlob) => {
+        if (!outBlob) {
+          reject(new Error("Falha ao comprimir a imagem."));
+          return;
+        }
+        resolve(outBlob);
+      },
+      "image/jpeg",
+      0.84,
+    );
+  });
+
+  return new File([blob], "profile.jpg", {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+}
+
 function formatDateFromMs(dateMs) {
   if (!dateMs) {
     return "-";
@@ -1222,23 +1285,23 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
       const file = avatarInput.files?.[0];
       if (!file || !onAvatarUpload) return;
 
-      // Show local preview immediately via FileReader
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        avatarImg.src = String(e.target?.result || "");
-        avatarImg.classList.remove("is-hidden");
-        avatarInitials.classList.add("is-hidden");
-      };
-      reader.readAsDataURL(file);
-
       // Upload to Firebase Cloud Storage
       if (avatarHint) avatarHint.classList.add("is-hidden");
       if (avatarUploading) avatarUploading.classList.remove("is-hidden");
-      setAvatarStatus("Enviando 0%", "info");
+      setAvatarStatus("Preparando imagem...", "info");
       try {
-        const url = await onAvatarUpload(file, (pct) => {
+        const optimizedFile = await optimizeAvatarImage(file);
+
+        const previewDataUrl = await readFileAsDataURL(optimizedFile);
+        avatarImg.src = previewDataUrl;
+        avatarImg.classList.remove("is-hidden");
+        avatarInitials.classList.add("is-hidden");
+
+        setAvatarStatus("Enviando 0%", "info");
+        const url = await onAvatarUpload(optimizedFile, (pct) => {
           setAvatarStatus(`Enviando ${Math.max(0, Math.min(100, pct))}%`, "info");
         });
+
         avatarImg.src = url; // replace data-URL with permanent URL
         if (avatarRemoveBtn) avatarRemoveBtn.classList.remove("is-hidden");
         setAvatarStatus("Foto atualizada com sucesso.", "success");

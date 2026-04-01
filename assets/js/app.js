@@ -779,22 +779,22 @@ function renderRoute(route, user) {
         const uid = state.user.uid;
         const avatarRef = storageRef(storage, `avatars/${uid}/profile.jpg`);
         const uploadTask = uploadBytesResumable(avatarRef, file, { contentType: file.type || "image/jpeg" });
-        await new Promise((resolve, reject) => {
-          uploadTask.on(
-            "state_changed",
-            (snapshot) => {
-              if (typeof onProgress === "function") {
-                const pct = snapshot.totalBytes
-                  ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-                  : 0;
-                onProgress(pct);
-              }
-            },
-            reject,
-            resolve,
-          );
+        const unsubscribe = uploadTask.on("state_changed", (snapshot) => {
+          if (typeof onProgress === "function") {
+            const pct = snapshot.totalBytes
+              ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+              : 0;
+            onProgress(pct);
+          }
         });
-        const url = await getDownloadURL(avatarRef);
+
+        try {
+          await uploadTask;
+        } finally {
+          unsubscribe();
+        }
+
+        const url = await getDownloadURL(uploadTask.snapshot.ref);
         const perfilRef = ref(db, `users/${uid}/perfil`);
         await update(perfilRef, { avatarUrl: url, updatedAt: serverTimestamp(), updatedAtMs: Date.now() });
         return url;

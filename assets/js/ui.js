@@ -279,6 +279,28 @@ function getHistoricoDateMs(entry) {
   return Number(entry?.dataMs) || parseDateOnlyToMs(entry?.dataGrad);
 }
 
+/**
+ * Formats a day count into a human-readable PT-BR duration string.
+ * < 30 d  → "18 dias treinando"
+ * 1-11 m  → "253 dias treinando (8 meses)"
+ * ≥ 12 m  → "428 dias treinando (1 ano e 2 meses)"
+ * Returns { main, detail, html } where html wraps detail in <span class="training-duration-detail">.
+ */
+function formatTrainingDuration(days) {
+  if (!days || days < 1) return null;
+  const dLabel = `${days} ${days === 1 ? "dia" : "dias"} treinando`;
+  const totalMonths = Math.floor(days / 30.44);
+  if (totalMonths < 1) return { main: dLabel, detail: "", html: dLabel };
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+  let parts = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "ano" : "anos"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "mês" : "meses"}`);
+  const detail = parts.join(" e ");
+  const html = `${dLabel} <span class="training-duration-detail">(${detail})</span>`;
+  return { main: dLabel, detail: `(${detail})`, html };
+}
+
 function computeTrainingDays(historicoGraduacoes) {
   const validDatesAsc = [...(historicoGraduacoes || [])]
     .map((entry) => getHistoricoDateMs(entry))
@@ -372,9 +394,8 @@ function renderPerfil(dataState, feedback, user, uiState) {
   const tlBlockGrad = buildTimelineBlockGradient(historico);
   const grauPct = Math.min(80, grauAtualNum * 20);
   const trainingInfo = computeTrainingDays(historico);
-  const diasTreinandoLabel = trainingInfo
-    ? `${trainingInfo.days} ${trainingInfo.days === 1 ? "dia" : "dias"} treinando`
-    : "—";
+  const durationFmt = trainingInfo ? formatTrainingDuration(trainingInfo.days) : null;
+  const diasTreinandoLabel = durationFmt ? durationFmt.html : "—";
 
   const profFaixa = perfil.professorFaixa || "";
   const profGrauVal = String(perfil.professorGrau ?? "");

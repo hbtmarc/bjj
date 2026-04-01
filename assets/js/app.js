@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   storage,
   storageRef,
-  uploadBytes,
+  uploadBytesResumable,
   getDownloadURL,
   deleteObject,
   initAnalyticsIfEnabled,
@@ -774,12 +774,26 @@ function renderRoute(route, user) {
       onLogout: async () => {
         await logoutUser();
       },
-      onAvatarUpload: async (file) => {
+      onAvatarUpload: async (file, onProgress) => {
         if (!state.user || !file) return;
         const uid = state.user.uid;
-        const ext = file.name.split(".").pop() || "jpg";
-        const avatarRef = storageRef(storage, `avatars/${uid}/profile.${ext}`);
-        await uploadBytes(avatarRef, file, { contentType: file.type });
+        const avatarRef = storageRef(storage, `avatars/${uid}/profile.jpg`);
+        const uploadTask = uploadBytesResumable(avatarRef, file, { contentType: file.type || "image/jpeg" });
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            "state_changed",
+            (snapshot) => {
+              if (typeof onProgress === "function") {
+                const pct = snapshot.totalBytes
+                  ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+                  : 0;
+                onProgress(pct);
+              }
+            },
+            reject,
+            resolve,
+          );
+        });
         const url = await getDownloadURL(avatarRef);
         const perfilRef = ref(db, `users/${uid}/perfil`);
         await update(perfilRef, { avatarUrl: url, updatedAt: serverTimestamp(), updatedAtMs: Date.now() });
@@ -791,8 +805,7 @@ function renderRoute(route, user) {
         const perfil = state.data.perfil || {};
         if (perfil.avatarUrl) {
           try {
-            const oldExt = perfil.avatarUrl.includes(".png") ? "png" : perfil.avatarUrl.includes(".webp") ? "webp" : "jpg";
-            const oldRef = storageRef(storage, `avatars/${uid}/profile.${oldExt}`);
+            const oldRef = storageRef(storage, `avatars/${uid}/profile.jpg`);
             await deleteObject(oldRef);
           } catch { /* file may not exist, ignore */ }
         }

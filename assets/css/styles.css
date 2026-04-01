@@ -765,6 +765,25 @@ html.reduce-motion * {
   animation: pulse-text 1.2s ease-in-out infinite;
 }
 
+.perfil-avatar-status {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-align: center;
+  min-height: 1.1em;
+}
+
+.perfil-avatar-status.info {
+  color: var(--muted);
+}
+
+.perfil-avatar-status.success {
+  color: #0f766e;
+}
+
+.perfil-avatar-status.error {
+  color: #b91c1c;
+}
+
 @keyframes pulse-text {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
@@ -1301,8 +1320,8 @@ html.reduce-motion * {
 }
 
 .perfil-age-path {
-  margin-top: 0.35rem;
-  font-size: 0.79rem;
+  margin-top: 0.15rem;
+  font-size: 0.74rem;
 }
 
 .perfil-chip-strip {
@@ -1563,28 +1582,69 @@ html.reduce-motion * {
 }
 
 /* ── Perfil card stacking on narrow screens ──────────── */
-@media (max-width: 400px) {
+/* ── Mobile: keep two-column avatar+info; stack pill col below identity ── */
+@media (max-width: 767px) {
   .perfil-athlete-card {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
+    display: grid;
+    grid-template-columns: 5rem minmax(0, 1fr);
+    grid-template-areas: "avatar info";
+    column-gap: var(--space-3);
+    align-items: start;
   }
 
+  .perfil-avatar-col {
+    grid-area: avatar;
+  }
+
+  .perfil-avatar {
+    width: 4.2rem;
+    height: 4.2rem;
+  }
+
+  .perfil-avatar-initials {
+    font-size: 1.4rem;
+  }
+
+  .perfil-athlete-info {
+    grid-area: info;
+    min-width: 0;
+  }
+
+  /* On mobile: stack identity + pills vertically; no side-by-side */
   .perfil-summary-top {
+    display: flex;
     flex-direction: column;
-    align-items: center;
-    width: 100%;
+    gap: 0.35rem;
   }
 
   .perfil-summary-pill-col {
-    align-items: center;
-  }
-
-  .perfil-primary-row {
-    justify-content: center;
+    align-items: flex-start;
+    max-width: 100%;
   }
 
   .perfil-chip-strip {
-    justify-content: center;
+    justify-content: flex-start;
+  }
+
+  .perfil-faixa-badge {
+    margin: 0;
+  }
+
+  .perfil-secondary-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    overflow: hidden;
+  }
+
+  .perfil-acad-prof {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .perfil-display-name {
+    font-size: 1.15rem;
   }
 }

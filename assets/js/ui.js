@@ -560,6 +560,7 @@ function renderPerfil(dataState, feedback, user, uiState) {
         </label>
         <span class="perfil-avatar-hint" id="perfil-avatar-hint">Alterar foto</span>
         <span class="perfil-avatar-uploading is-hidden" id="perfil-avatar-uploading">Enviando…</span>
+        <span class="perfil-avatar-status is-hidden" id="perfil-avatar-status" role="status" aria-live="polite"></span>
         <button id="btn-remove-avatar" class="icon-btn danger-icon-btn perfil-remove-avatar ${perfil.avatarUrl ? '' : 'is-hidden'}" type="button" aria-label="Remover foto" title="Remover foto">${ICONS.removeImg}</button>
       </div>
 
@@ -1201,6 +1202,20 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
   const avatarRemoveBtn = document.querySelector("#btn-remove-avatar");
   const avatarHint = document.querySelector("#perfil-avatar-hint");
   const avatarUploading = document.querySelector("#perfil-avatar-uploading");
+  const avatarStatus = document.querySelector("#perfil-avatar-status");
+
+  const setAvatarStatus = (text, type = "info") => {
+    if (!avatarStatus) return;
+    if (!text) {
+      avatarStatus.textContent = "";
+      avatarStatus.classList.add("is-hidden");
+      avatarStatus.classList.remove("success", "error", "info");
+      return;
+    }
+    avatarStatus.textContent = text;
+    avatarStatus.classList.remove("is-hidden", "success", "error", "info");
+    avatarStatus.classList.add(type);
+  };
 
   if (avatarInput && avatarImg && avatarInitials) {
     avatarInput.addEventListener("change", async () => {
@@ -1219,16 +1234,21 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
       // Upload to Firebase Cloud Storage
       if (avatarHint) avatarHint.classList.add("is-hidden");
       if (avatarUploading) avatarUploading.classList.remove("is-hidden");
+      setAvatarStatus("Enviando 0%", "info");
       try {
-        const url = await onAvatarUpload(file);
+        const url = await onAvatarUpload(file, (pct) => {
+          setAvatarStatus(`Enviando ${Math.max(0, Math.min(100, pct))}%`, "info");
+        });
         avatarImg.src = url; // replace data-URL with permanent URL
         if (avatarRemoveBtn) avatarRemoveBtn.classList.remove("is-hidden");
+        setAvatarStatus("Foto atualizada com sucesso.", "success");
       } catch (err) {
         console.error("Avatar upload failed:", err);
         // revert preview
         avatarImg.src = "";
         avatarImg.classList.add("is-hidden");
         avatarInitials.classList.remove("is-hidden");
+        setAvatarStatus("Não foi possível enviar a foto.", "error");
       } finally {
         if (avatarHint) avatarHint.classList.remove("is-hidden");
         if (avatarUploading) avatarUploading.classList.add("is-hidden");
@@ -1241,14 +1261,17 @@ export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarR
     avatarRemoveBtn.addEventListener("click", async () => {
       if (avatarHint) avatarHint.classList.add("is-hidden");
       if (avatarUploading) avatarUploading.classList.remove("is-hidden");
+      setAvatarStatus("Removendo foto...", "info");
       try {
         if (onAvatarRemove) await onAvatarRemove();
         if (avatarImg) { avatarImg.src = ""; avatarImg.classList.add("is-hidden"); }
         if (avatarInitials) avatarInitials.classList.remove("is-hidden");
         if (avatarInput) avatarInput.value = "";
         avatarRemoveBtn.classList.add("is-hidden");
+        setAvatarStatus("Foto removida.", "success");
       } catch (err) {
         console.error("Avatar remove failed:", err);
+        setAvatarStatus("Não foi possível remover a foto.", "error");
       } finally {
         if (avatarHint) avatarHint.classList.remove("is-hidden");
         if (avatarUploading) avatarUploading.classList.add("is-hidden");

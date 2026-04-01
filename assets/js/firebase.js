@@ -10,6 +10,13 @@ import {
   onValue,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBj5NDookHiZy0oPRRCLnrWjfmFkM2XBmw",
@@ -24,6 +31,7 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
+const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
 async function initAnalyticsIfEnabled(enabled = false) {
@@ -45,6 +53,7 @@ export {
   app,
   auth,
   db,
+  storage,
   ref,
   push,
   set,
@@ -52,6 +61,10 @@ export {
   get,
   onValue,
   serverTimestamp,
+  storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
   googleProvider,
   initAnalyticsIfEnabled,
   firebaseConfig,

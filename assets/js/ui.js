@@ -418,13 +418,16 @@ function renderPerfil(dataState, feedback, user, uiState) {
   const diasTreinandoLabel = durationFmt ? durationFmt.html : "—";
 
   const profFaixa = perfil.professorFaixa || "";
-  const profGrauVal = String(perfil.professorGrau ?? "");
-  const profGrauLabel = profGrauVal === "0" ? "" : profGrauVal ? `${profGrauVal}° grau` : "";
-  const profLine = [perfil.professor, profFaixa ? `Faixa ${profFaixa}` : "", profGrauLabel].filter(Boolean).join(" · ");
+  const profLine = [perfil.professor].filter(Boolean).join(" - ");
+  const acadProfParts = [];
+  if (perfil.academia) acadProfParts.push(perfil.academia);
+  if (profLine) acadProfParts.push(`Prof. ${profLine}`);
+  const acadProfLine = acadProfParts.join(' <span class="perfil-sep" aria-hidden="true">•</span> ');
+  const ageTierLabel = typeof idadeAtual === "number" ? (idadeAtual < 18 ? "Juvenil" : "Adulto") : "n/i";
+  const ageMiniLabel = typeof idadeAtual === "number" ? `${idadeAtual}a · ${ageTierLabel}` : `idade n/i · ${ageTierLabel}`;
 
   const emailValue = user?.email || "";
   const gradInfo = computeGradProgress(historico, perfil.proximaMetaGraduacao);
-  const updatedLabel = perfil.updatedAtMs ? `Atualizado em ${formatDateFromMs(perfil.updatedAtMs)}` : "";
 
   const faixaOptionsList = ensurePathContainsFaixa(beltPath, perfil.faixaAtual || perfil.faixa || "");
   const faixaOptions = faixaOptionsList
@@ -547,35 +550,51 @@ function renderPerfil(dataState, feedback, user, uiState) {
       <div class="perfil-avatar-col">
         <label class="perfil-avatar-label" for="perfil-avatar-input" title="Alterar foto de perfil">
           <div class="perfil-avatar" id="perfil-avatar-wrap" style="border-color:${beltColor.border}">
-            <img class="perfil-avatar-img is-hidden" id="perfil-avatar-preview" src="" alt="Foto do atleta" />
-            <span class="perfil-avatar-initials" id="perfil-avatar-initials"
+            <img class="perfil-avatar-img ${perfil.avatarUrl ? '' : 'is-hidden'}" id="perfil-avatar-preview"
+              src="${perfil.avatarUrl || ''}" alt="Foto do atleta"
+              onerror="this.classList.add('is-hidden');this.nextElementSibling.classList.remove('is-hidden')" />
+            <span class="perfil-avatar-initials ${perfil.avatarUrl ? 'is-hidden' : ''}" id="perfil-avatar-initials"
               style="background:${beltColor.bg};color:${beltColor.fg}">${initials}</span>
           </div>
           <input id="perfil-avatar-input" type="file" accept="image/*" class="sr-only" />
-          <span class="perfil-avatar-hint">Alterar foto</span>
         </label>
-        <button id="btn-remove-avatar" class="icon-btn danger-icon-btn perfil-remove-avatar is-hidden" type="button" aria-label="Remover foto" title="Remover foto">${ICONS.removeImg}</button>
+        <span class="perfil-avatar-hint" id="perfil-avatar-hint">Alterar foto</span>
+        <span class="perfil-avatar-uploading is-hidden" id="perfil-avatar-uploading">Enviando…</span>
+        <button id="btn-remove-avatar" class="icon-btn danger-icon-btn perfil-remove-avatar ${perfil.avatarUrl ? '' : 'is-hidden'}" type="button" aria-label="Remover foto" title="Remover foto">${ICONS.removeImg}</button>
       </div>
 
       <div class="perfil-athlete-info">
-        <p class="perfil-display-name">${displayName || '<em class="muted-text">Nome não definido</em>'}</p>
-        ${perfil.apelido ? `<p class="perfil-apelido">&ldquo;${perfil.apelido}&rdquo;</p>` : ""}
-        <p class="perfil-faixa-badge">
-          <span class="perfil-faixa-pill" style="background:${beltColor.bg};color:${beltColor.fg};border:1.5px solid ${beltColor.border};box-shadow:0 1px 3px ${beltColor.bg}66">${faixaChip}</span>
-        </p>
-        ${perfil.academia ? `<p class="perfil-sub"><strong>Academia:</strong> ${perfil.academia}</p>` : ""}
-        ${profLine ? `<p class="perfil-sub perfil-prof-line"><strong>Prof.:</strong> ${profLine}</p>` : ""}
-        ${(perfil.objetivoPrincipal || perfil.categoriaDePeso || perfil.frequenciaSemanalDesejada) ? `
-        <div class="perfil-chip-strip">
-          ${perfil.objetivoPrincipal ? `<span class="chip">${perfil.objetivoPrincipal}</span>` : ""}
-          ${perfil.categoriaDePeso ? `<span class="chip">${perfil.categoriaDePeso}</span>` : ""}
-          ${perfil.frequenciaSemanalDesejada ? `<span class="chip">${perfil.frequenciaSemanalDesejada}×/sem.</span>` : ""}
-        </div>` : ""}
-        <p class="perfil-sub perfil-age-path">
-          <strong>Percurso:</strong> ${typeof idadeAtual === "number" ? `${idadeAtual} anos` : "idade não informada"} · ${typeof idadeAtual === "number" && idadeAtual < 18 ? "Juvenil" : "Adulto"}
-        </p>
+        <div class="perfil-summary-top">
+          <div class="perfil-summary-identity">
+            ${perfil.apelido
+              ? `<div class="perfil-primary-row">
+                   <p class="perfil-display-name">${perfil.apelido}</p>
+                   <span class="perfil-age-mini">${ageMiniLabel}</span>
+                 </div>
+                 <p class="perfil-secondary-name">${displayName}</p>
+                 ${acadProfLine ? `<p class="perfil-acad-prof">${acadProfLine}</p>` : ""}`
+              : `<div class="perfil-primary-row">
+                   <p class="perfil-display-name">${displayName || '<em class="muted-text">Nome não definido</em>'}</p>
+                   <span class="perfil-age-mini">${ageMiniLabel}</span>
+                 </div>
+                 ${acadProfLine ? `<p class="perfil-acad-prof">${acadProfLine}</p>` : ""}`
+            }
+          </div>
+          <div class="perfil-summary-pill-col">
+            <p class="perfil-faixa-badge">
+              <span class="perfil-faixa-pill" style="background:${beltColor.bg};color:${beltColor.fg};border:1.5px solid ${beltColor.border};box-shadow:0 1px 3px ${beltColor.bg}66">${faixaChip}</span>
+            </p>
+
+            ${(perfil.objetivoPrincipal || perfil.categoriaDePeso || perfil.frequenciaSemanalDesejada) ? `
+            <div class="perfil-chip-strip">
+              ${perfil.objetivoPrincipal ? `<span class="chip">${perfil.objetivoPrincipal}</span>` : ""}
+              ${perfil.categoriaDePeso ? `<span class="chip">${perfil.categoriaDePeso}</span>` : ""}
+              ${perfil.frequenciaSemanalDesejada ? `<span class="chip">${perfil.frequenciaSemanalDesejada}×/sem.</span>` : ""}
+            </div>` : ""}
+          </div>
+        </div>
+
         ${headerGradBar}
-        ${updatedLabel ? `<p class="perfil-updated-label">${updatedLabel}</p>` : ""}
       </div>
     </header>
 
@@ -1174,45 +1193,66 @@ export function mountLoginHandlers({ onEmailLogin, onGoogleLogin }) {
   }
 }
 
-export function mountPerfilHandler({ onSave, onLogout, onAddGrad, onDeleteGrad, onEditGrad }) {
-  // ── Avatar preview + remove ───────────────────────────
+export function mountPerfilHandler({ onSave, onLogout, onAvatarUpload, onAvatarRemove, onAddGrad, onDeleteGrad, onEditGrad }) {
+  // ── Avatar upload + remove (Firebase Cloud Storage) ───
   const avatarInput = document.querySelector("#perfil-avatar-input");
   const avatarImg = document.querySelector("#perfil-avatar-preview");
   const avatarInitials = document.querySelector("#perfil-avatar-initials");
   const avatarRemoveBtn = document.querySelector("#btn-remove-avatar");
+  const avatarHint = document.querySelector("#perfil-avatar-hint");
+  const avatarUploading = document.querySelector("#perfil-avatar-uploading");
 
   if (avatarInput && avatarImg && avatarInitials) {
-    avatarInput.addEventListener("change", () => {
+    avatarInput.addEventListener("change", async () => {
       const file = avatarInput.files?.[0];
-      if (!file) {
-        return;
-      }
+      if (!file || !onAvatarUpload) return;
+
+      // Show local preview immediately via FileReader
       const reader = new FileReader();
       reader.onload = (e) => {
         avatarImg.src = String(e.target?.result || "");
         avatarImg.classList.remove("is-hidden");
         avatarInitials.classList.add("is-hidden");
-        if (avatarRemoveBtn) {
-          avatarRemoveBtn.classList.remove("is-hidden");
-        }
       };
       reader.readAsDataURL(file);
+
+      // Upload to Firebase Cloud Storage
+      if (avatarHint) avatarHint.classList.add("is-hidden");
+      if (avatarUploading) avatarUploading.classList.remove("is-hidden");
+      try {
+        const url = await onAvatarUpload(file);
+        avatarImg.src = url; // replace data-URL with permanent URL
+        if (avatarRemoveBtn) avatarRemoveBtn.classList.remove("is-hidden");
+      } catch (err) {
+        console.error("Avatar upload failed:", err);
+        // revert preview
+        avatarImg.src = "";
+        avatarImg.classList.add("is-hidden");
+        avatarInitials.classList.remove("is-hidden");
+      } finally {
+        if (avatarHint) avatarHint.classList.remove("is-hidden");
+        if (avatarUploading) avatarUploading.classList.add("is-hidden");
+        avatarInput.value = "";
+      }
     });
   }
 
   if (avatarRemoveBtn) {
-    avatarRemoveBtn.addEventListener("click", () => {
-      if (avatarImg) {
-        avatarImg.src = "";
-        avatarImg.classList.add("is-hidden");
+    avatarRemoveBtn.addEventListener("click", async () => {
+      if (avatarHint) avatarHint.classList.add("is-hidden");
+      if (avatarUploading) avatarUploading.classList.remove("is-hidden");
+      try {
+        if (onAvatarRemove) await onAvatarRemove();
+        if (avatarImg) { avatarImg.src = ""; avatarImg.classList.add("is-hidden"); }
+        if (avatarInitials) avatarInitials.classList.remove("is-hidden");
+        if (avatarInput) avatarInput.value = "";
+        avatarRemoveBtn.classList.add("is-hidden");
+      } catch (err) {
+        console.error("Avatar remove failed:", err);
+      } finally {
+        if (avatarHint) avatarHint.classList.remove("is-hidden");
+        if (avatarUploading) avatarUploading.classList.add("is-hidden");
       }
-      if (avatarInitials) {
-        avatarInitials.classList.remove("is-hidden");
-      }
-      if (avatarInput) {
-        avatarInput.value = "";
-      }
-      avatarRemoveBtn.classList.add("is-hidden");
     });
   }
 

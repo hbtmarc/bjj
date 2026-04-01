@@ -9,6 +9,11 @@ import {
   update,
   onValue,
   serverTimestamp,
+  storage,
+  storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
   initAnalyticsIfEnabled,
 } from "./firebase.js";
 import { apostilaItems, apostilaSections } from "./apostila-data.js";
@@ -768,6 +773,31 @@ function renderRoute(route, user) {
       },
       onLogout: async () => {
         await logoutUser();
+      },
+      onAvatarUpload: async (file) => {
+        if (!state.user || !file) return;
+        const uid = state.user.uid;
+        const ext = file.name.split(".").pop() || "jpg";
+        const avatarRef = storageRef(storage, `avatars/${uid}/profile.${ext}`);
+        await uploadBytes(avatarRef, file, { contentType: file.type });
+        const url = await getDownloadURL(avatarRef);
+        const perfilRef = ref(db, `users/${uid}/perfil`);
+        await update(perfilRef, { avatarUrl: url, updatedAt: serverTimestamp(), updatedAtMs: Date.now() });
+        return url;
+      },
+      onAvatarRemove: async () => {
+        if (!state.user) return;
+        const uid = state.user.uid;
+        const perfil = state.data.perfil || {};
+        if (perfil.avatarUrl) {
+          try {
+            const oldExt = perfil.avatarUrl.includes(".png") ? "png" : perfil.avatarUrl.includes(".webp") ? "webp" : "jpg";
+            const oldRef = storageRef(storage, `avatars/${uid}/profile.${oldExt}`);
+            await deleteObject(oldRef);
+          } catch { /* file may not exist, ignore */ }
+        }
+        const perfilRef = ref(db, `users/${uid}/perfil`);
+        await update(perfilRef, { avatarUrl: "", updatedAt: serverTimestamp(), updatedAtMs: Date.now() });
       },
       onAddGrad: saveGraduacaoHistorico,
       onDeleteGrad: deleteGraduacaoHistorico,

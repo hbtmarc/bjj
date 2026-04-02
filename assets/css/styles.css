@@ -1592,19 +1592,60 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
-  padding: 0.55rem;
+  padding: 0;
+}
+
+.apostila-study-history-disclosure {
   display: grid;
   gap: 0.45rem;
+}
+
+.apostila-study-history-summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.55rem;
+}
+
+.apostila-study-history-summary::-webkit-details-marker {
+  display: none;
+}
+
+.apostila-study-history-toggle {
+  font-size: 0.74rem;
+  color: var(--primary);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.apostila-study-history-disclosure[open] .apostila-study-history-summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.apostila-study-history-disclosure[open] .apostila-study-history-toggle {
+  color: var(--muted);
+}
+
+.apostila-study-history-disclosure[open] .apostila-study-history-toggle::after {
+  content: " · ocultar";
+}
+
+.apostila-study-history-disclosure:not([open]) .apostila-study-history-toggle::after {
+  content: " · expandir";
 }
 
 .apostila-study-history-head {
   display: grid;
   gap: 0.1rem;
+  min-width: 0;
 }
 
 .apostila-study-history-notes {
   margin: 0;
-  padding: 0;
+  padding: 0.1rem 0.55rem 0.55rem;
   list-style: none;
   display: grid;
   gap: 0.4rem;

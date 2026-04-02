@@ -1422,31 +1422,36 @@ function renderApostilaStudyHistory(historyEntries, sections) {
 
             return `
               <li class="apostila-study-history-item">
-                <div class="apostila-study-history-head">
-                  <strong>${formatDateTimeFromMs(entry.savedAt || entry.finishedAt)}</strong>
-                  <span class="apostila-shell-meta">Pontuação ${points.toFixed(1).replace(".", ",")} / ${evaluatedCount} · Aproveitamento ${scorePct}% · Execução ${evaluatedCount}/${totalQueue} (${executionPct}%)</span>
-                </div>
-                <ul class="apostila-study-history-notes">
-                  ${groupedRows
-                    .map((group) => {
-                      return `
-                        <li class="apostila-study-history-group">
-                          <p class="apostila-study-history-group-title">${group.sectionLabel}</p>
-                          <ul class="apostila-study-history-group-list">
-                            ${group.rows
-                              .map((row) => `
-                                <li class="apostila-study-history-note-row">
-                                  <span class="apostila-study-history-note-text">${row.order}. ${row.movementName}</span>
-                                  <strong class="apostila-study-history-note-grade ${getGradeBadgeClass(row.gradeLabel)}">Nota ${row.gradeLabel}</strong>
-                                </li>
-                              `)
-                              .join("")}
-                          </ul>
-                        </li>
-                      `;
-                    })
-                    .join("")}
-                </ul>
+                <details class="apostila-study-history-disclosure">
+                  <summary class="apostila-study-history-summary">
+                    <div class="apostila-study-history-head">
+                      <strong>${formatDateTimeFromMs(entry.savedAt || entry.finishedAt)}</strong>
+                      <span class="apostila-shell-meta">Pontuação ${points.toFixed(1).replace(".", ",")} / ${evaluatedCount} · Aproveitamento ${scorePct}% · Execução ${evaluatedCount}/${totalQueue} (${executionPct}%)</span>
+                    </div>
+                    <span class="apostila-study-history-toggle">Ver simulação</span>
+                  </summary>
+                  <ul class="apostila-study-history-notes">
+                    ${groupedRows
+                      .map((group) => {
+                        return `
+                          <li class="apostila-study-history-group">
+                            <p class="apostila-study-history-group-title">${group.sectionLabel}</p>
+                            <ul class="apostila-study-history-group-list">
+                              ${group.rows
+                                .map((row) => `
+                                  <li class="apostila-study-history-note-row">
+                                    <span class="apostila-study-history-note-text">${row.order}. ${row.movementName}</span>
+                                    <strong class="apostila-study-history-note-grade ${getGradeBadgeClass(row.gradeLabel)}">Nota ${row.gradeLabel}</strong>
+                                  </li>
+                                `)
+                                .join("")}
+                            </ul>
+                          </li>
+                        `;
+                      })
+                      .join("")}
+                  </ul>
+                </details>
               </li>
             `;
           })

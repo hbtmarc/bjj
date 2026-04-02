@@ -97,6 +97,7 @@ const state = {
     treinos: [],
     progressoApostila: {},
     apostilaStudy: {},
+    apostilaStudyHistory: [],
     apostilaExamSessions: [],
     apostilaMediaUsage: {},
     apostilaFlow: {
@@ -153,6 +154,7 @@ const state = {
       treinos: false,
       progressoApostila: false,
       apostilaStudy: false,
+      apostilaStudyHistory: false,
       apostilaExam: false,
       apostilaMediaUsage: false,
       apostilaFlow: false,
@@ -785,9 +787,21 @@ function resumeLastApostilaFlow() {
     return;
   }
 
+  if (flow.lastMode === "exam_random") {
+    state.ui.apostilaModo = "simulado";
+    startApostilaExamSession({ mode: "random", sectionId: "", promptStyle: "mov_to_jp", sourceAction: "resume" });
+    return;
+  }
+
   if (flow.lastMode === "pending" || flow.lastMode === "jp_to_mov" || flow.lastMode === "mov_to_jp") {
     state.ui.apostilaModo = "estudar";
     startApostilaStudySession({ mode: flow.lastMode, sectionId: "", sourceAction: "resume" });
+    return;
+  }
+
+  if (flow.lastMode === "ordered") {
+    state.ui.apostilaModo = "estudar";
+    startApostilaStudySession({ mode: "ordered", sectionId: "", sourceAction: "resume" });
     return;
   }
 
@@ -1013,6 +1027,37 @@ function normalizeExamSessionEntry(entry) {
   };
 }
 
+function normalizeStudyHistoryEntry(entry) {
+  const gradeCounts = entry?.gradeCounts && typeof entry.gradeCounts === "object" ? entry.gradeCounts : {};
+  const gradedItems = Array.isArray(entry?.gradedItems)
+    ? entry.gradedItems.map((item) => ({
+        itemId: String(item?.itemId || ""),
+        order: Number(item?.order || 0),
+        score: Number(item?.score || 0),
+        label: String(item?.label || "0"),
+      })).filter((item) => item.itemId)
+    : [];
+
+  return {
+    mode: String(entry?.mode || "ordered"),
+    reason: String(entry?.reason || "auto_end"),
+    startedAt: Number(entry?.startedAt || 0),
+    finishedAt: Number(entry?.finishedAt || 0),
+    savedAt: Number(entry?.savedAt || 0),
+    totalQueue: Number(entry?.totalQueue || 0),
+    evaluatedCount: Number(entry?.evaluatedCount || 0),
+    points: Number(entry?.points || 0),
+    scorePct: Number(entry?.scorePct || 0),
+    executionPct: Number(entry?.executionPct || 0),
+    gradeCounts: {
+      note1: Number(gradeCounts.note1 || 0),
+      note05: Number(gradeCounts.note05 || 0),
+      note0: Number(gradeCounts.note0 || 0),
+    },
+    gradedItems,
+  };
+}
+
 function sortTreinosNewestFirst(items) {
   return items.sort((left, right) => {
     if (left.dataMs !== right.dataMs) {
@@ -1185,6 +1230,7 @@ function bindRealtimeData(user) {
   const treinosRef = ref(db, `users/${user.uid}/treinos`);
   const progressoRef = ref(db, `users/${user.uid}/progressoApostila`);
   const apostilaStudyRef = ref(db, `users/${user.uid}/apostilaStudy`);
+  const apostilaStudyHistoryRef = ref(db, `users/${user.uid}/apostilaStudyHistory`);
   const apostilaExamRef = ref(db, `users/${user.uid}/apostilaExam`);
   const apostilaMediaUsageRef = ref(db, `users/${user.uid}/apostilaMediaUsage`);
   const apostilaFlowRef = ref(db, `users/${user.uid}/apostilaFlow`);
@@ -1195,6 +1241,7 @@ function bindRealtimeData(user) {
   setLoading("treinos", true);
   setLoading("progressoApostila", true);
   setLoading("apostilaStudy", true);
+  setLoading("apostilaStudyHistory", true);
   setLoading("apostilaExam", true);
   setLoading("apostilaMediaUsage", true);
   setLoading("apostilaFlow", true);
@@ -1282,6 +1329,24 @@ function bindRealtimeData(user) {
     }
   );
 
+  const stopApostilaStudyHistory = onValue(
+    apostilaStudyHistoryRef,
+    (snapshot) => {
+      state.data.apostilaStudyHistory = parseCollection(snapshot.val())
+        .map((entry) => ({
+          id: entry.id,
+          ...normalizeStudyHistoryEntry(entry),
+        }))
+        .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0));
+      setLoading("apostilaStudyHistory", false);
+      rerender();
+    },
+    () => {
+      setLoading("apostilaStudyHistory", false);
+      rerender();
+    }
+  );
+
   const stopApostilaExam = onValue(
     apostilaExamRef,
     (snapshot) => {
@@ -1347,7 +1412,7 @@ function bindRealtimeData(user) {
     }
   );
 
-  state.listeners = [stopPerfil, stopHistorico, stopTreinos, stopProgresso, stopApostilaStudy, stopApostilaExam, stopApostilaMediaUsage, stopApostilaFlow, stopApostilaGamification];
+  state.listeners = [stopPerfil, stopHistorico, stopTreinos, stopProgresso, stopApostilaStudy, stopApostilaStudyHistory, stopApostilaExam, stopApostilaMediaUsage, stopApostilaFlow, stopApostilaGamification];
 }
 
 function resetPrivateData() {
@@ -1356,6 +1421,7 @@ function resetPrivateData() {
   state.data.treinos = [];
   state.data.progressoApostila = {};
   state.data.apostilaStudy = {};
+  state.data.apostilaStudyHistory = [];
   state.data.apostilaExamSessions = [];
   state.data.apostilaMediaUsage = {};
   state.data.apostilaFlow = {
@@ -1411,6 +1477,7 @@ function resetPrivateData() {
     treinos: false,
     progressoApostila: false,
     apostilaStudy: false,
+    apostilaStudyHistory: false,
     apostilaExam: false,
     apostilaMediaUsage: false,
     apostilaFlow: false,
@@ -1565,25 +1632,120 @@ function createStudySessionState({ selectedMode, selectedSectionId, queue }) {
   return {
     selectedMode,
     selectedSectionId: selectedSectionId || null,
+    startedAt: Date.now(),
+    finishedAt: 0,
+    historySaved: false,
     queue: normalizedQueue,
     currentIndex: 0,
     currentItem: normalizedQueue[0] || null,
+    itemGrades: {},
     answerRevealed: false,
     finished: normalizedQueue.length === 0,
     sessionStats: {
       correct: 0,
+      half: 0,
       wrong: 0,
       skipped: 0,
+      notDone: 0,
       completed: 0,
+      points: 0,
       wrongItemIds: [],
     },
   };
 }
 
+async function saveApostilaStudyHistorySnapshot(session, reason = "auto_end") {
+  if (!state.user || !session || session.historySaved) {
+    return;
+  }
+
+  const queue = Array.isArray(session.queue) ? session.queue : [];
+  const itemGrades = session.itemGrades && typeof session.itemGrades === "object" ? session.itemGrades : {};
+  const gradedItems = queue
+    .map((itemId, index) => {
+      const grade = itemGrades[itemId];
+      if (!grade) {
+        return null;
+      }
+
+      return {
+        itemId,
+        order: index + 1,
+        score: Number(grade.score || 0),
+        label: String(grade.label || "0"),
+      };
+    })
+    .filter(Boolean);
+
+  if (!gradedItems.length) {
+    return;
+  }
+
+  const evaluatedCount = gradedItems.length;
+  const points = Number(session?.sessionStats?.points || 0);
+  const totalQueue = queue.length;
+  const gradeCounts = gradedItems.reduce((acc, item) => {
+    if (item.score >= 1) {
+      acc.note1 += 1;
+    } else if (item.score >= 0.5) {
+      acc.note05 += 1;
+    } else {
+      acc.note0 += 1;
+    }
+    return acc;
+  }, { note1: 0, note05: 0, note0: 0 });
+  const finishedAt = Number(session.finishedAt || Date.now());
+  const savedAt = Date.now();
+  const id = `study_${savedAt}`;
+
+  const entry = {
+    id,
+    mode: String(session.selectedMode || "ordered"),
+    reason: String(reason || "auto_end"),
+    startedAt: Number(session.startedAt || 0),
+    finishedAt,
+    savedAt,
+    totalQueue,
+    evaluatedCount,
+    points,
+    scorePct: evaluatedCount > 0 ? Math.round((points / evaluatedCount) * 100) : 0,
+    executionPct: totalQueue > 0 ? Math.round((evaluatedCount / totalQueue) * 100) : 0,
+    gradeCounts,
+    gradedItems,
+  };
+
+  const current = Array.isArray(state.data.apostilaStudyHistory) ? state.data.apostilaStudyHistory : [];
+  const next = [entry, ...current]
+    .map((item) => ({ id: String(item.id || ""), ...normalizeStudyHistoryEntry(item) }))
+    .filter((item) => item.id)
+    .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+    .slice(0, 5);
+
+  const payload = {};
+  next.forEach((item) => {
+    const { id: itemId, ...rest } = item;
+    payload[itemId] = rest;
+  });
+
+  session.historySaved = true;
+  state.data.apostilaStudyHistory = next;
+  rerender();
+
+  try {
+    const historyRef = ref(db, `users/${state.user.uid}/apostilaStudyHistory`);
+    await set(historyRef, payload);
+  } catch {
+    session.historySaved = false;
+    setRouteFeedback("apostila", "Falha ao salvar histórico automático de estudo.", "error");
+  }
+}
+
 function startApostilaStudySession({ mode, sectionId = null, sourceAction = "" }) {
   let queue = [];
 
-  if (mode === "section") {
+  if (mode === "ordered") {
+    queue = getOrderedApostilaItems().map((item) => item.id).filter(Boolean);
+  } else if (mode === "section") {
     queue = buildStudyQueueBySection(sectionId);
   } else if (mode === "jp_to_mov" || mode === "mov_to_jp") {
     queue = buildStudyQueueJapaneseOnly();
@@ -1658,6 +1820,10 @@ async function updateApostilaStudyProgress(itemId, result) {
     patch.streak = Math.max(0, Number(current.streak || 0) - 1);
     patch.totalSkipped = Number(current.totalSkipped || 0) + 1;
     patch.dueAt = now + 3 * 60 * 60 * 1000;
+  } else if (result === "half") {
+    patch.streak = 0;
+    patch.totalSkipped = Number(current.totalSkipped || 0) + 1;
+    patch.dueAt = now + 90 * 60 * 1000;
   }
 
   state.data.apostilaStudy = {
@@ -1685,19 +1851,60 @@ async function answerApostilaStudySession(result) {
 
   const currentItemId = session.currentItem;
 
-  if (result === "correct" || result === "wrong" || result === "skipped") {
+  if (result === "repeat") {
+    session.answerRevealed = false;
+    rerender();
+    return;
+  }
+
+  if (result === "not_done") {
+    session.sessionStats.notDone = Number(session.sessionStats.notDone || 0) + 1;
+
+    const nextIndexNotDone = session.currentIndex + 1;
+    if (nextIndexNotDone >= session.queue.length) {
+      session.currentIndex = nextIndexNotDone;
+      session.currentItem = null;
+      session.answerRevealed = false;
+      session.finished = true;
+      session.finishedAt = Date.now();
+      await saveApostilaStudyHistorySnapshot(session, "auto_complete");
+      rerender();
+      return;
+    }
+
+    session.currentIndex = nextIndexNotDone;
+    session.currentItem = session.queue[nextIndexNotDone] || null;
+    session.answerRevealed = false;
+    state.ui.apostilaStudySupportVisible = false;
+    state.ui.apostilaSupportItemId = null;
+    state.ui.apostilaSupportContext = "";
+    rerender();
+    return;
+  }
+
+  if (result === "correct" || result === "wrong" || result === "skipped" || result === "half") {
     await updateApostilaStudyProgress(currentItemId, result);
   }
 
   if (result === "correct") {
     session.sessionStats.correct += 1;
+    session.sessionStats.points += 1;
+    session.itemGrades[currentItemId] = { score: 1, label: "1" };
+  } else if (result === "half") {
+    session.sessionStats.half += 1;
+    session.sessionStats.points += 0.5;
+    session.itemGrades[currentItemId] = { score: 0.5, label: "0,5" };
   } else if (result === "wrong") {
     session.sessionStats.wrong += 1;
     if (!session.sessionStats.wrongItemIds.includes(currentItemId)) {
       session.sessionStats.wrongItemIds.push(currentItemId);
     }
+    session.sessionStats.points += 0;
+    session.itemGrades[currentItemId] = { score: 0, label: "0" };
   } else {
     session.sessionStats.skipped += 1;
+    session.sessionStats.points += 0;
+    session.itemGrades[currentItemId] = { score: 0, label: "0" };
   }
 
   session.sessionStats.completed += 1;
@@ -1708,6 +1915,7 @@ async function answerApostilaStudySession(result) {
     session.currentItem = null;
     session.answerRevealed = false;
     session.finished = true;
+    session.finishedAt = Date.now();
     const streakInfo = await applyStudyStreakUpdate();
     await patchApostilaGamification({
       sectionsReady: { ...(state.data.gamificationOverview?.readinessBySection || {}) },
@@ -1715,6 +1923,7 @@ async function answerApostilaStudySession(result) {
     const perfectSectionReview = session.selectedMode === "section" && session.sessionStats.wrong === 0 && session.sessionStats.completed > 0;
     const badgesEarnedNow = await evaluateDerivedBadges({ perfectSectionReview });
     session.rewardFeedback = buildStudyRewardFeedback(session, streakInfo, badgesEarnedNow);
+    await saveApostilaStudyHistorySnapshot(session, "auto_complete");
     rerender();
     return;
   }
@@ -1735,12 +1944,16 @@ async function endApostilaStudySession() {
   }
 
   if (session.finished) {
+    if (!session.historySaved) {
+      await saveApostilaStudyHistorySnapshot(session, "manual_end");
+    }
     state.ui.apostilaStudySession = null;
     rerender();
     return;
   }
 
   session.finished = true;
+  session.finishedAt = Date.now();
   session.currentItem = null;
   session.answerRevealed = false;
   if (!session.rewardFeedback && Number(session.sessionStats?.completed || 0) > 0) {
@@ -1752,6 +1965,7 @@ async function endApostilaStudySession() {
     const badgesEarnedNow = await evaluateDerivedBadges({ perfectSectionReview });
     session.rewardFeedback = buildStudyRewardFeedback(session, streakInfo, badgesEarnedNow);
   }
+  await saveApostilaStudyHistorySnapshot(session, "manual_end");
   rerender();
 }
 
@@ -1824,6 +2038,19 @@ function buildExamQueueFull() {
   return getOrderedApostilaItems().map((item) => item.id).filter(Boolean);
 }
 
+function shuffleArray(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function buildExamQueueRandom() {
+  return shuffleArray(buildExamQueueFull());
+}
+
 function createExamSessionState({ examMode, selectedSectionId, queue, promptStyle }) {
   const normalizedQueue = Array.isArray(queue) ? queue.filter(Boolean) : [];
 
@@ -1855,6 +2082,8 @@ function startApostilaExamSession({ mode, sectionId = null, promptStyle = "mov_t
     queue = buildExamQueueBySection(sectionId);
   } else if (mode === "full") {
     queue = buildExamQueueFull();
+  } else if (mode === "random") {
+    queue = buildExamQueueRandom();
   }
 
   state.ui.apostilaExamSession = createExamSessionState({
@@ -1865,7 +2094,7 @@ function startApostilaExamSession({ mode, sectionId = null, promptStyle = "mov_t
   });
 
   registerApostilaFlowActivity({
-    mode: mode === "section" ? "exam_section" : "exam_full",
+    mode: mode === "section" ? "exam_section" : mode === "random" ? "exam_random" : "exam_full",
     sectionId: mode === "section" ? String(sectionId || "") : "",
     recommendedAction: sourceAction,
   });
@@ -1902,10 +2131,10 @@ async function persistApostilaExamSession(session) {
 
   const payload = {
     mode: session.examMode,
-    selectedSectionId: session.selectedSectionId || null,
-    promptStyle: session.promptStyle || "mov_to_jp",
-    startedAt: Number(session.startedAt || finishedAt),
-    finishedAt,
+    title: "Simulação finalizada",
+    progressText: `${total} movimentos · ${correct} execuções validadas · ${wrong} pontos para revisar · consistência ${score}%`,
+    improvedText: `${correct} movimento(s) foram consolidados nesta rodada.`,
+    weakText: wrong + skipped > 0 ? `${wrong + skipped} movimento(s) pedem repetição imediata.` : "Sem pontos frágeis nesta simulação.",
     score,
     totalItems,
     mistakes,

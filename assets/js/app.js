@@ -802,6 +802,12 @@ function resumeLastApostilaFlow() {
     return;
   }
 
+  if (flow.lastMode === "random") {
+    state.ui.apostilaModo = "estudar";
+    startApostilaStudySession({ mode: "random", sectionId: "", sourceAction: "resume" });
+    return;
+  }
+
   if (flow.lastMode === "ordered") {
     state.ui.apostilaModo = "estudar";
     startApostilaStudySession({ mode: "ordered", sectionId: "", sourceAction: "resume" });
@@ -1771,6 +1777,144 @@ function toggleApostilaStudyPause() {
   rerender();
 }
 
+function createExamDrillSessionState({ queue }) {
+  const normalizedQueue = Array.isArray(queue) ? queue.filter(Boolean) : [];
+
+  return {
+    examMode: "ordinal",
+    queue: normalizedQueue,
+    currentIndex: 0,
+    currentItem: normalizedQueue[0] || null,
+    timerTotalSeconds: STUDY_TIMER_SECONDS,
+    timerRemainingSeconds: STUDY_TIMER_SECONDS,
+    timerStartedAt: Date.now(),
+    isPaused: false,
+    itemGrades: {},
+    answerRevealed: false,
+    finished: normalizedQueue.length === 0,
+    finishedAt: 0,
+    sessionStats: {
+      correct: 0,
+      half: 0,
+      wrong: 0,
+      skipped: 0,
+      notDone: 0,
+      completed: 0,
+      points: 0,
+      wrongItemIds: [],
+    },
+  };
+}
+
+function startApostilaExamDrillSession() {
+  const queue = getOrderedApostilaItems().map((item) => item.id).filter(Boolean);
+  state.ui.apostilaExamSession = createExamDrillSessionState({ queue });
+  state.ui.apostilaSupportItemId = null;
+  state.ui.apostilaSupportContext = "";
+  state.ui.apostilaStudySupportVisible = false;
+  state.ui.apostilaExamSupportVisible = false;
+  rerender();
+}
+
+function toggleApostilaExamPause() {
+  const session = state.ui.apostilaExamSession;
+  if (!session || session.finished) {
+    return;
+  }
+
+  if (session.isPaused) {
+    resumeStudySessionTimer(session);
+  } else {
+    pauseStudySessionTimer(session);
+  }
+
+  rerender();
+}
+
+async function answerApostilaExamDrillSession(result) {
+  const session = state.ui.apostilaExamSession;
+  if (!session || session.finished || !session.currentItem || session.isPaused) {
+    return;
+  }
+
+  const currentItemId = session.currentItem;
+  const currentSectionId = getSectionByApostilaItemId(currentItemId)?.id || "";
+
+  if (result === "repeat") {
+    session.answerRevealed = false;
+    rerender();
+    return;
+  }
+
+  if (result === "not_done") {
+    session.sessionStats.notDone = Number(session.sessionStats.notDone || 0) + 1;
+  } else if (result === "correct") {
+    session.sessionStats.correct += 1;
+    session.sessionStats.points += 1;
+    session.itemGrades[currentItemId] = { score: 1, label: "1" };
+  } else if (result === "half") {
+    session.sessionStats.half += 1;
+    session.sessionStats.points += 0.5;
+    session.itemGrades[currentItemId] = { score: 0.5, label: "0,5" };
+  } else {
+    session.sessionStats.wrong += 1;
+    session.itemGrades[currentItemId] = { score: 0, label: "0" };
+  }
+
+  if (result !== "not_done") {
+    session.sessionStats.completed += 1;
+  }
+
+  const nextIndex = session.currentIndex + 1;
+  if (nextIndex >= session.queue.length) {
+    if (currentSectionId) {
+      registerSectionCompletedAlert(currentSectionId);
+    }
+    session.currentIndex = nextIndex;
+    session.currentItem = null;
+    session.answerRevealed = false;
+    session.finished = true;
+    session.finishedAt = Date.now();
+    rerender();
+    return;
+  }
+
+  const nextItemId = session.queue[nextIndex] || null;
+  const nextSectionId = getSectionByApostilaItemId(nextItemId)?.id || "";
+  if (currentSectionId && nextSectionId && currentSectionId !== nextSectionId) {
+    registerSectionCompletedAlert(currentSectionId);
+  }
+
+  session.currentIndex = nextIndex;
+  session.currentItem = session.queue[nextIndex] || null;
+  resetStudySessionTimer(session);
+  session.answerRevealed = false;
+  rerender();
+}
+
+function restartApostilaExamDrillSession() {
+  startApostilaExamDrillSession();
+}
+
+function endApostilaExamDrillSession() {
+  const session = state.ui.apostilaExamSession;
+  if (!session) {
+    return;
+  }
+
+  if (session.finished) {
+    state.ui.apostilaExamSession = null;
+    rerender();
+    return;
+  }
+
+  session.finished = true;
+  session.finishedAt = Date.now();
+  session.currentItem = null;
+  session.answerRevealed = false;
+  rerender();
+}
+
 async function saveApostilaStudyHistorySnapshot(session, reason = "auto_end") {
   if (!state.user || !session || session.historySaved) {
     return;
@@ -1862,6 +2006,8 @@ function startApostilaStudySession({ mode, sectionId = null, sourceAction = "" }
 
   if (mode === "ordered") {
     queue = getOrderedApostilaItems().map((item) => item.id).filter(Boolean);
+  } else if (mode === "random") {
+    queue = shuffleArray(getOrderedApostilaItems().map((item) => item.id).filter(Boolean));
   } else if (mode === "section") {
     queue = buildStudyQueueBySection(sectionId);
   } else if (mode === "jp_to_mov" || mode === "mov_to_jp") {
@@ -2883,10 +3029,20 @@ function renderRoute(route, user) {
           pauseStudySessionTimer(state.ui.apostilaStudySession);
         }
 
+        if (
+          previousMode === "simulado"
+          && modo !== "simulado"
+          && state.ui.apostilaExamSession
+          && !state.ui.apostilaExamSession.finished
+          && !state.ui.apostilaExamSession.isPaused
+        ) {
+          pauseStudySessionTimer(state.ui.apostilaExamSession);
+        }
+
         state.ui.apostilaModo = modo;
 
-        if (modo !== "simulado") {
-          state.ui.apostilaExamSession = null;
+        if (modo === "simulado" && state.ui.apostilaStudySession && !state.ui.apostilaStudySession.finished && !state.ui.apostilaStudySession.isPaused) {
+          pauseStudySessionTimer(state.ui.apostilaStudySession);
         }
 
         state.ui.apostilaSupportItemId = null;
@@ -2917,19 +3073,22 @@ function renderRoute(route, user) {
         restartWrongItemsStudySession();
       },
       onStartExamSession: ({ mode, sectionId, promptStyle }) => {
-        startApostilaExamSession({ mode, sectionId, promptStyle });
+        startApostilaExamDrillSession();
       },
       onRevealExamAnswer: () => {
         revealApostilaExamAnswer();
       },
       onAnswerExamSession: async (result) => {
-        await answerApostilaExamSession(result);
+        await answerApostilaExamDrillSession(result);
       },
       onEndExamSession: async () => {
-        await endApostilaExamSession();
+        endApostilaExamDrillSession();
       },
       onRestartExamSession: () => {
-        restartApostilaExamSession();
+        restartApostilaExamDrillSession();
+      },
+      onToggleExamPause: () => {
+        toggleApostilaExamPause();
       },
       onReviewCurrentExamMistakes: () => {
         reviewCurrentExamMistakes();

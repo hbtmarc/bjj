@@ -1462,7 +1462,12 @@ function renderApostilaStudyHistory(historyEntries, sections) {
 }
 
 function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
-  const studyHistory = Array.isArray(dataState?.apostilaStudyHistory) ? dataState.apostilaStudyHistory : [];
+  const isSimulado = uiState?.apostilaModo === "simulado";
+  const titleText = isSimulado ? "Simulado de exame" : "Estudar a apostila";
+  const subtitleText = isSimulado
+    ? "Ambiente dedicado com a mesma estrutura do estudo, seguindo ordem ordinal da apostila."
+    : "Apresentação ordenada com avaliação rápida por movimento.";
+  const studyHistory = isSimulado ? [] : (Array.isArray(dataState?.apostilaStudyHistory) ? dataState.apostilaStudyHistory : []);
   const sectionAlert = uiState?.apostilaSectionAlert || null;
   const totalSessao = Number(studySession?.queue?.length || 0);
   const currentIndex = Number(studySession?.currentIndex || 0);
@@ -1548,18 +1553,19 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
 
   if (!studySession) {
     return `
-      <section class="apostila-mode-shell" aria-label="Estudar a apostila">
+      <section class="apostila-mode-shell" aria-label="${titleText}">
         <header class="apostila-mode-head">
           <div>
-            <h3 class="section-title">Estudar a apostila</h3>
-            <p class="page-subtitle">Apresentação ordenada da apostila para execução dos movimentos.</p>
+            <h3 class="section-title">${titleText}</h3>
+            <p class="page-subtitle">${subtitleText}</p>
           </div>
         </header>
         <article class="apostila-shell-card">
           <h4>Sessão ordenada</h4>
           <p>Percorre todos os movimentos da apostila na ordem oficial com avaliação simples por pontos.</p>
           <div class="actions-row apostila-study-actions-row">
-            <button class="primary-icon-btn" type="button" data-apostila-study-mode="ordered">Iniciar apresentação</button>
+            <button class="primary-icon-btn" type="button" data-apostila-study-mode="ordered">${isSimulado ? "Iniciar simulado" : "Iniciar apresentação"}</button>
+            ${isSimulado ? "" : '<button class="icon-btn" type="button" data-apostila-study-mode="random">Iniciar aleatório</button>'}
           </div>
         </article>
         ${renderApostilaStudyHistory(studyHistory, sections)}
@@ -1573,10 +1579,10 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
       : "Sessão finalizada com todos os movimentos executados.";
 
     return `
-      <section class="apostila-mode-shell" aria-label="Estudar a apostila">
+      <section class="apostila-mode-shell" aria-label="${titleText}">
         <header class="apostila-mode-head">
           <div>
-            <h3 class="section-title">Estudar a apostila</h3>
+            <h3 class="section-title">${titleText}</h3>
             <p class="page-subtitle">${finalStateLabel}</p>
           </div>
         </header>
@@ -1631,11 +1637,11 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
   }
 
   return `
-    <section class="apostila-mode-shell" aria-label="Estudar a apostila">
+    <section class="apostila-mode-shell" aria-label="${titleText}">
       <header class="apostila-mode-head">
         <div>
-          <h3 class="section-title">Estudar a apostila</h3>
-          <p class="page-subtitle">Apresentação ordenada com avaliação rápida por movimento.</p>
+          <h3 class="section-title">${titleText}</h3>
+          <p class="page-subtitle">${subtitleText}</p>
         </div>
       </header>
 
@@ -1691,19 +1697,10 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
 }
 
 function renderApostilaSimuladoMode(dataState, sections, examSession, uiState) {
-  return `
-    <section class="apostila-mode-shell" aria-label="Simulado de exame">
-      <header class="apostila-mode-head">
-        <div>
-          <h3 class="section-title">Simulado de exame</h3>
-          <p class="page-subtitle">Este modo foi limpo para reconstrução do zero.</p>
-        </div>
-      </header>
-      <article class="apostila-shell-card">
-        <p class="empty-state">Modo de simulado temporariamente desativado.</p>
-      </article>
-    </section>
-  `;
+  return renderApostilaEstudoMode(dataState, sections, examSession, {
+    ...(uiState || {}),
+    apostilaModo: "simulado",
+  });
 }
 
 function renderApostila(dataState, feedback, uiState) {
@@ -2220,6 +2217,7 @@ export function mountApostilaHandlers({
   onAnswerExamSession,
   onEndExamSession,
   onRestartExamSession,
+  onToggleExamPause,
   onReviewCurrentExamMistakes,
   onReviewSavedExamMistakes,
   onRunGuidedAction,
@@ -2352,19 +2350,25 @@ export function mountApostilaHandlers({
     });
   });
 
-  if (modoAtual === "estudar") {
+  if (modoAtual === "estudar" || modoAtual === "simulado") {
+    const isExamMode = modoAtual === "simulado";
     document.querySelectorAll("[data-apostila-study-mode]").forEach((button) => {
       button.addEventListener("click", () => {
-        if (typeof onStartStudySession !== "function") {
-          return;
-        }
-
         const mode = String(button.getAttribute("data-apostila-study-mode") || "");
         if (!mode) {
           return;
         }
 
-        onStartStudySession({ mode, sectionId: "" });
+        if (isExamMode) {
+          if (typeof onStartExamSession === "function") {
+            onStartExamSession({ mode: "full", sectionId: "", promptStyle: "mov_to_jp" });
+          }
+          return;
+        }
+
+        if (typeof onStartStudySession === "function") {
+          onStartStudySession({ mode, sectionId: "" });
+        }
       });
     });
 
@@ -2375,27 +2379,54 @@ export function mountApostilaHandlers({
           return;
         }
 
-        if (action === "end-session" && typeof onEndStudySession === "function") {
-          await onEndStudySession();
+        if (action === "end-session") {
+          if (isExamMode && typeof onEndExamSession === "function") {
+            await onEndExamSession();
+            return;
+          }
+          if (!isExamMode && typeof onEndStudySession === "function") {
+            await onEndStudySession();
+            return;
+          }
           return;
         }
 
-        if (action === "restart-session" && typeof onRestartStudySession === "function") {
-          onRestartStudySession();
+        if (action === "restart-session") {
+          if (isExamMode && typeof onRestartExamSession === "function") {
+            onRestartExamSession();
+            return;
+          }
+          if (!isExamMode && typeof onRestartStudySession === "function") {
+            onRestartStudySession();
+            return;
+          }
           return;
         }
 
-        if (action === "pause-session" && typeof onToggleStudyPause === "function") {
-          onToggleStudyPause();
+        if (action === "pause-session") {
+          if (isExamMode && typeof onToggleExamPause === "function") {
+            onToggleExamPause();
+            return;
+          }
+          if (!isExamMode && typeof onToggleStudyPause === "function") {
+            onToggleStudyPause();
+            return;
+          }
           return;
         }
 
-        if (action === "answer" && typeof onAnswerStudySession === "function") {
+        if (action === "answer") {
           const result = String(button.getAttribute("data-apostila-study-result") || "");
           if (!result) {
             return;
           }
-          await onAnswerStudySession(result);
+          if (isExamMode && typeof onAnswerExamSession === "function") {
+            await onAnswerExamSession(result);
+            return;
+          }
+          if (!isExamMode && typeof onAnswerStudySession === "function") {
+            await onAnswerStudySession(result);
+          }
         }
       });
     });
@@ -2431,10 +2462,6 @@ export function mountApostilaHandlers({
       }, 100);
     }
 
-    return;
-  }
-
-  if (modoAtual === "simulado") {
     return;
   }
 

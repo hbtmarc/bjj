@@ -1263,7 +1263,7 @@ body {
 }
 
 .apostila-session-section-title {
-  margin: 0;
+  margin: 0.08rem 0 0;
   font-size: 1.02rem;
   line-height: 1.2;
   color: var(--muted);
@@ -1274,22 +1274,25 @@ body {
 }
 
 .apostila-session-movement-title {
-  margin: 0;
+  margin: 0.12rem 0 0.22rem;
   font-size: 2.05rem;
   font-weight: 800;
   line-height: 1.08;
+  letter-spacing: -0.01em;
+  animation: apostilaMovementIn 300ms ease-out;
 }
 
 .apostila-next-spoiler {
-  margin-top: 0.5rem;
+  margin-top: 0.62rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-soft);
+  animation: apostilaSpoilerIn 320ms ease-out;
 }
 
 .apostila-next-spoiler-label {
   margin: 0;
-  padding: 0.45rem 0.55rem;
+  padding: 0.48rem 0.58rem;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--primary);
@@ -1311,10 +1314,32 @@ body {
 }
 
 .apostila-next-spoiler-title {
-  margin: 0;
+  margin: 0.08rem 0 0.12rem;
   font-size: 1.28rem;
   line-height: 1.2;
   font-weight: 800;
+}
+
+@keyframes apostilaMovementIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes apostilaSpoilerIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 }
 
@@ -1451,6 +1476,12 @@ body {
   margin-bottom: 0.2rem;
 }
 
+.apostila-session-progress-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .apostila-session-progress {
   padding: 0.12rem 0.42rem;
   border: 1px solid var(--border);
@@ -1460,12 +1491,64 @@ body {
   font-weight: 700;
 }
 
+.apostila-session-progress-section {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-soft));
+}
+
+.apostila-section-alert {
+  margin: 0.1rem 0 0.42rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--success) 36%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: color-mix(in srgb, var(--success) 66%, var(--text));
+  font-size: 0.8rem;
+  line-height: 1.3;
+  animation: apostilaAlertIn 260ms ease-out;
+}
+
+@keyframes apostilaAlertIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reduce-motion .apostila-section-alert {
+  animation: none;
+}
+
+.reduce-motion .apostila-session-movement-title,
+.reduce-motion .apostila-next-spoiler {
+  animation: none;
+}
+
 .apostila-action-repeat {
   margin-left: 0.3rem;
 }
 
 .apostila-action-finalize {
   margin-left: 0.6rem;
+}
+
+.apostila-action-pause {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+}
+
+.apostila-session-actions.is-paused {
+  opacity: 0.94;
+}
+
+.apostila-timer-box.is-paused .apostila-timer-labels span::after {
+  content: " (pausado)";
+  color: var(--primary);
+  font-weight: 700;
 }
 
 @media (max-width: 560px) {

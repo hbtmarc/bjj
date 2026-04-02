@@ -24,6 +24,7 @@ import {
 } from "./ui.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const STUDY_TIMER_SECONDS = 20;
 const CLOUDINARY_CLOUD_NAME = "dhbybowgp";
 const CLOUDINARY_UPLOAD_PRESET = "avatar_perfil_unsigned";
 const MASTERY_FAMILIARITY_THRESHOLD = 3;
@@ -174,6 +175,7 @@ const state = {
     apostilaSupportContext: "",
     apostilaStudySupportVisible: false,
     apostilaExamSupportVisible: false,
+    apostilaSectionAlert: null,
     perfilSecaoAberta: null,
   },
   feedback: {
@@ -188,6 +190,7 @@ const state = {
 const view = document.querySelector("#app-view");
 let isRouterStarted = false;
 let rerenderScheduled = false;
+let apostilaSectionAlertTimeoutId = null;
 
 function renderSessionBooting() {
   if (!view) {
@@ -1417,6 +1420,10 @@ function bindRealtimeData(user) {
 
 function resetPrivateData() {
   unbindAllListeners();
+  if (apostilaSectionAlertTimeoutId) {
+    clearTimeout(apostilaSectionAlertTimeoutId);
+    apostilaSectionAlertTimeoutId = null;
+  }
   state.data.perfil = null;
   state.data.treinos = [];
   state.data.progressoApostila = {};
@@ -1496,6 +1503,7 @@ function resetPrivateData() {
     apostilaSupportContext: "",
     apostilaStudySupportVisible: false,
     apostilaExamSupportVisible: false,
+    apostilaSectionAlert: null,
     perfilSecaoAberta: null,
   };
   clearRouteFeedback("perfil");
@@ -1626,6 +1634,51 @@ function buildStudyQueuePending() {
   return prioritized.length ? prioritized : buildStudyQueueJapaneseOnly().slice(0, 20);
 }
 
+function getSectionByApostilaItemId(itemId) {
+  if (!itemId) {
+    return null;
+  }
+
+  const sections = state.data.apostilaSections || [];
+  for (const section of sections) {
+    const exists = (section.itens || []).some((item) => item.id === itemId);
+    if (exists) {
+      return section;
+    }
+  }
+
+  return null;
+}
+
+function registerSectionCompletedAlert(sectionId) {
+  if (!sectionId) {
+    return;
+  }
+
+  const section = (state.data.apostilaSections || []).find((candidate) => candidate.id === sectionId);
+  if (!section) {
+    return;
+  }
+
+  state.ui.apostilaSectionAlert = {
+    sectionId,
+    label: `${section.ordemSecao}. ${section.titulo}`,
+    createdAt: Date.now(),
+  };
+
+  if (apostilaSectionAlertTimeoutId) {
+    clearTimeout(apostilaSectionAlertTimeoutId);
+  }
+
+  apostilaSectionAlertTimeoutId = setTimeout(() => {
+    if (state.ui.apostilaSectionAlert?.sectionId === sectionId) {
+      state.ui.apostilaSectionAlert = null;
+      rerender();
+    }
+    apostilaSectionAlertTimeoutId = null;
+  }, 2800);
+}
+
 function createStudySessionState({ selectedMode, selectedSectionId, queue }) {
   const normalizedQueue = Array.isArray(queue) ? queue.filter(Boolean) : [];
 
@@ -1638,6 +1691,10 @@ function createStudySessionState({ selectedMode, selectedSectionId, queue }) {
     queue: normalizedQueue,
     currentIndex: 0,
     currentItem: normalizedQueue[0] || null,
+    timerTotalSeconds: STUDY_TIMER_SECONDS,
+    timerRemainingSeconds: STUDY_TIMER_SECONDS,
+    timerStartedAt: Date.now(),
+    isPaused: false,
     itemGrades: {},
     answerRevealed: false,
     finished: normalizedQueue.length === 0,
@@ -1652,6 +1709,66 @@ function createStudySessionState({ selectedMode, selectedSectionId, queue }) {
       wrongItemIds: [],
     },
   };
+}
+
+function getStudySessionTimerRemaining(session) {
+  if (!session) {
+    return STUDY_TIMER_SECONDS;
+  }
+
+  const total = Number(session.timerTotalSeconds || STUDY_TIMER_SECONDS);
+  const baseRemaining = Math.max(0, Number(session.timerRemainingSeconds || total));
+  if (session.isPaused) {
+    return baseRemaining;
+  }
+
+  const startedAt = Number(session.timerStartedAt || Date.now());
+  const elapsed = Math.max(0, (Date.now() - startedAt) / 1000);
+  return Math.max(0, baseRemaining - elapsed);
+}
+
+function resetStudySessionTimer(session) {
+  if (!session) {
+    return;
+  }
+
+  const total = Number(session.timerTotalSeconds || STUDY_TIMER_SECONDS);
+  session.timerRemainingSeconds = total;
+  session.timerStartedAt = Date.now();
+  session.isPaused = false;
+}
+
+function pauseStudySessionTimer(session) {
+  if (!session || session.isPaused) {
+    return;
+  }
+
+  session.timerRemainingSeconds = getStudySessionTimerRemaining(session);
+  session.isPaused = true;
+}
+
+function resumeStudySessionTimer(session) {
+  if (!session || !session.isPaused) {
+    return;
+  }
+
+  session.isPaused = false;
+  session.timerStartedAt = Date.now();
+}
+
+function toggleApostilaStudyPause() {
+  const session = state.ui.apostilaStudySession;
+  if (!session || session.finished) {
+    return;
+  }
+
+  if (session.isPaused) {
+    resumeStudySessionTimer(session);
+  } else {
+    pauseStudySessionTimer(session);
+  }
+
+  rerender();
 }
 
 async function saveApostilaStudyHistorySnapshot(session, reason = "auto_end") {
@@ -1849,7 +1966,12 @@ async function answerApostilaStudySession(result) {
     return;
   }
 
+  if (session.isPaused) {
+    return;
+  }
+
   const currentItemId = session.currentItem;
+  const currentSectionId = getSectionByApostilaItemId(currentItemId)?.id || "";
 
   if (result === "repeat") {
     session.answerRevealed = false;
@@ -1862,6 +1984,9 @@ async function answerApostilaStudySession(result) {
 
     const nextIndexNotDone = session.currentIndex + 1;
     if (nextIndexNotDone >= session.queue.length) {
+      if (currentSectionId) {
+        registerSectionCompletedAlert(currentSectionId);
+      }
       session.currentIndex = nextIndexNotDone;
       session.currentItem = null;
       session.answerRevealed = false;
@@ -1872,8 +1997,15 @@ async function answerApostilaStudySession(result) {
       return;
     }
 
+    const nextItemIdNotDone = session.queue[nextIndexNotDone] || null;
+    const nextSectionIdNotDone = getSectionByApostilaItemId(nextItemIdNotDone)?.id || "";
+    if (currentSectionId && nextSectionIdNotDone && currentSectionId !== nextSectionIdNotDone) {
+      registerSectionCompletedAlert(currentSectionId);
+    }
+
     session.currentIndex = nextIndexNotDone;
     session.currentItem = session.queue[nextIndexNotDone] || null;
+    resetStudySessionTimer(session);
     session.answerRevealed = false;
     state.ui.apostilaStudySupportVisible = false;
     state.ui.apostilaSupportItemId = null;
@@ -1911,6 +2043,9 @@ async function answerApostilaStudySession(result) {
 
   const nextIndex = session.currentIndex + 1;
   if (nextIndex >= session.queue.length) {
+    if (currentSectionId) {
+      registerSectionCompletedAlert(currentSectionId);
+    }
     session.currentIndex = nextIndex;
     session.currentItem = null;
     session.answerRevealed = false;
@@ -1928,8 +2063,15 @@ async function answerApostilaStudySession(result) {
     return;
   }
 
+  const nextItemId = session.queue[nextIndex] || null;
+  const nextSectionId = getSectionByApostilaItemId(nextItemId)?.id || "";
+  if (currentSectionId && nextSectionId && currentSectionId !== nextSectionId) {
+    registerSectionCompletedAlert(currentSectionId);
+  }
+
   session.currentIndex = nextIndex;
   session.currentItem = session.queue[nextIndex] || null;
+  resetStudySessionTimer(session);
   session.answerRevealed = false;
   state.ui.apostilaStudySupportVisible = false;
   state.ui.apostilaSupportItemId = null;
@@ -2730,9 +2872,23 @@ function renderRoute(route, user) {
     mountApostilaHandlers({
       modoAtual: state.ui.apostilaModo,
       onModeChange: (modo) => {
+        const previousMode = state.ui.apostilaModo;
+        if (
+          previousMode === "estudar"
+          && modo !== "estudar"
+          && state.ui.apostilaStudySession
+          && !state.ui.apostilaStudySession.finished
+          && !state.ui.apostilaStudySession.isPaused
+        ) {
+          pauseStudySessionTimer(state.ui.apostilaStudySession);
+        }
+
         state.ui.apostilaModo = modo;
-        state.ui.apostilaStudySession = null;
-        state.ui.apostilaExamSession = null;
+
+        if (modo !== "simulado") {
+          state.ui.apostilaExamSession = null;
+        }
+
         state.ui.apostilaSupportItemId = null;
         state.ui.apostilaSupportContext = "";
         state.ui.apostilaStudySupportVisible = false;
@@ -2753,6 +2909,9 @@ function renderRoute(route, user) {
       },
       onRestartStudySession: () => {
         restartApostilaStudySession();
+      },
+      onToggleStudyPause: () => {
+        toggleApostilaStudyPause();
       },
       onRestartWrongStudySession: () => {
         restartWrongItemsStudySession();

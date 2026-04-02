@@ -1458,6 +1458,7 @@ function renderApostilaStudyHistory(historyEntries, sections) {
 
 function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
   const studyHistory = Array.isArray(dataState?.apostilaStudyHistory) ? dataState.apostilaStudyHistory : [];
+  const sectionAlert = uiState?.apostilaSectionAlert || null;
   const totalSessao = Number(studySession?.queue?.length || 0);
   const currentIndex = Number(studySession?.currentIndex || 0);
   const currentItem = studySession?.currentItem ? getApostilaItemById(sections, studySession.currentItem) : null;
@@ -1477,6 +1478,30 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
   const pctHalf = gradedCount > 0 ? Math.round((half / gradedCount) * 100) : 0;
   const pctZero = gradedCount > 0 ? Math.round((zero / gradedCount) * 100) : 0;
   const sessionPosition = totalSessao ? `${Math.min(currentIndex + 1, totalSessao)} de ${totalSessao}` : "0 de 0";
+  const timerTotalSeconds = Number(studySession?.timerTotalSeconds || 20);
+  const timerBaseRemaining = Number(studySession?.timerRemainingSeconds || timerTotalSeconds);
+  const isTimerPaused = Boolean(studySession?.isPaused);
+  const sectionProgress = (() => {
+    if (!currentItem || !Array.isArray(studySession?.queue)) {
+      return { current: 0, total: 0 };
+    }
+
+    const sectionId = currentItem.secaoId;
+    const queue = studySession.queue;
+    const sectionIndexes = queue
+      .map((itemId, index) => ({ itemId, index }))
+      .filter(({ itemId }) => {
+        const queueItem = getApostilaItemById(sections, itemId);
+        return queueItem?.secaoId === sectionId;
+      })
+      .map(({ index }) => index);
+
+    const completedInSection = sectionIndexes.filter((index) => index < currentIndex).length;
+    return {
+      current: completedInSection,
+      total: sectionIndexes.length,
+    };
+  })();
   const nextItemId = totalSessao && (currentIndex + 1) < totalSessao
     ? studySession?.queue?.[currentIndex + 1] || null
     : null;
@@ -1609,10 +1634,15 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
         </div>
       </header>
 
-      <article class="apostila-shell-card apostila-study-session-card" data-apostila-active-session="study" data-apostila-timer-seconds="20">
+      <article class="apostila-shell-card apostila-study-session-card" data-apostila-active-session="study" data-apostila-timer-seconds="${timerTotalSeconds}" data-apostila-timer-remaining="${timerBaseRemaining}" data-apostila-timer-paused="${isTimerPaused ? "true" : "false"}">
         <div class="apostila-session-head">
-          <p class="apostila-shell-meta apostila-session-progress">${sessionPosition}</p>
+          <div class="apostila-session-progress-group">
+            <p class="apostila-shell-meta apostila-session-progress">${sessionPosition}</p>
+            <p class="apostila-shell-meta apostila-session-progress apostila-session-progress-section">Seção ${sectionProgress.current}/${sectionProgress.total}</p>
+          </div>
         </div>
+
+        ${sectionAlert ? `<p class="apostila-section-alert" role="status" aria-live="polite">Seção concluída: <strong>${sectionAlert.label}</strong></p>` : ""}
 
         <h3 class="apostila-session-movement-title">${currentItem?.nome || "—"}</h3>
         <p class="apostila-shell-meta apostila-session-section">Seção</p>
@@ -1631,22 +1661,23 @@ function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
           `
           : ""}
 
-        <div class="apostila-timer-box" aria-label="Tempo regressivo">
+        <div class="apostila-timer-box ${isTimerPaused ? "is-paused" : ""}" aria-label="Tempo regressivo">
           <div class="apostila-timer-labels">
             <span>Tempo para execução</span>
-            <strong id="apostila-timer-value">20s</strong>
+            <strong id="apostila-timer-value">${Math.ceil(timerBaseRemaining)}s</strong>
           </div>
           <div class="apostila-timer-track">
-            <div id="apostila-timer-fill" class="apostila-timer-fill" style="width:100%"></div>
+            <div id="apostila-timer-fill" class="apostila-timer-fill" style="width:${Math.max(0, Math.min(100, (timerBaseRemaining / Math.max(1, timerTotalSeconds)) * 100)).toFixed(1)}%"></div>
           </div>
         </div>
 
-        <div class="actions-row apostila-session-actions">
-          <button class="primary-icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="correct">1 ponto</button>
-          <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="half">0,5 ponto</button>
-          <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="wrong">0 ponto</button>
-          <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="not_done">Não fez</button>
-          <button class="icon-btn apostila-action-repeat" type="button" data-apostila-study-action="answer" data-apostila-study-result="repeat">Repetir</button>
+        <div class="actions-row apostila-session-actions ${isTimerPaused ? "is-paused" : ""}">
+          <button class="primary-icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="correct" ${isTimerPaused ? "disabled" : ""}>1 ponto</button>
+          <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="half" ${isTimerPaused ? "disabled" : ""}>0,5 ponto</button>
+          <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="wrong" ${isTimerPaused ? "disabled" : ""}>0 ponto</button>
+          <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="not_done" ${isTimerPaused ? "disabled" : ""}>Não fez</button>
+          <button class="icon-btn apostila-action-repeat" type="button" data-apostila-study-action="answer" data-apostila-study-result="repeat" ${isTimerPaused ? "disabled" : ""}>Repetir</button>
+          <button class="icon-btn apostila-action-pause" type="button" data-apostila-study-action="pause-session">${isTimerPaused ? "Retomar" : "Pausar"}</button>
           <button class="icon-btn apostila-action-finalize" type="button" data-apostila-study-action="end-session">Finalizar aqui</button>
         </div>
       </article>
@@ -2177,6 +2208,7 @@ export function mountApostilaHandlers({
   onAnswerStudySession,
   onEndStudySession,
   onRestartStudySession,
+  onToggleStudyPause,
   onRestartWrongStudySession,
   onStartExamSession,
   onRevealExamAnswer,
@@ -2348,6 +2380,11 @@ export function mountApostilaHandlers({
           return;
         }
 
+        if (action === "pause-session" && typeof onToggleStudyPause === "function") {
+          onToggleStudyPause();
+          return;
+        }
+
         if (action === "answer" && typeof onAnswerStudySession === "function") {
           const result = String(button.getAttribute("data-apostila-study-result") || "");
           if (!result) {
@@ -2362,20 +2399,22 @@ export function mountApostilaHandlers({
     const timerFill = document.querySelector("#apostila-timer-fill");
     const timerValue = document.querySelector("#apostila-timer-value");
     const totalSeconds = Number(timerRoot?.getAttribute("data-apostila-timer-seconds") || 20);
+    const baseRemaining = Number(timerRoot?.getAttribute("data-apostila-timer-remaining") || totalSeconds);
+    const isPaused = String(timerRoot?.getAttribute("data-apostila-timer-paused") || "false") === "true";
     if (timerRoot && timerFill && timerValue && totalSeconds > 0) {
       const startedAt = Date.now();
       const tick = () => {
         if (!timerRoot.isConnected || !timerFill.isConnected || !timerValue.isConnected) {
           return false;
         }
-        const elapsed = (Date.now() - startedAt) / 1000;
-        const remaining = Math.max(0, totalSeconds - elapsed);
+        const elapsed = isPaused ? 0 : (Date.now() - startedAt) / 1000;
+        const remaining = Math.max(0, baseRemaining - elapsed);
         const pct = (remaining / totalSeconds) * 100;
         const hue = Math.max(0, Math.min(120, (remaining / totalSeconds) * 120));
         timerFill.style.width = `${pct.toFixed(1)}%`;
         timerFill.style.background = `hsl(${hue}, 78%, 45%)`;
         timerValue.textContent = `${Math.ceil(remaining)}s`;
-        return remaining > 0;
+        return !isPaused && remaining > 0;
       };
 
       tick();

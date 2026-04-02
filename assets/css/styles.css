@@ -516,6 +516,35 @@ body {
   gap: var(--space-2);
 }
 
+.apostila-mode-switch {
+  margin: var(--space-2) 0 var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.btn-apostila-mode {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #4b5563;
+  border-radius: var(--radius-pill);
+  padding: 0.34rem 0.72rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.btn-apostila-mode:hover {
+  background: var(--surface-soft);
+}
+
+.btn-apostila-mode.is-active {
+  color: var(--primary);
+  border-color: rgba(31, 58, 138, 0.28);
+  background: rgba(31, 58, 138, 0.08);
+  font-weight: 600;
+}
+
 .apostila-reading-layout {
   display: grid;
   gap: var(--space-3);
@@ -613,13 +642,22 @@ body {
 
 .apostila-study-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-2);
   padding: 0.44rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: #fff;
+}
+
+.apostila-study-row-wrap {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.apostila-support-open-btn {
+  justify-self: end;
 }
 
 .apostila-ordem {
@@ -633,6 +671,520 @@ body {
 .apostila-title {
   margin: 0;
   line-height: 1.3;
+}
+
+.apostila-support-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 0.62rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.apostila-support-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.apostila-support-header h4 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.apostila-support-jp {
+  margin: 0.16rem 0;
+  font-size: 0.86rem;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.apostila-support-core,
+.apostila-support-media {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.52rem;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.apostila-support-core h5,
+.apostila-support-media h5 {
+  margin: 0;
+  font-size: 0.83rem;
+}
+
+.apostila-support-core p,
+.apostila-support-media p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.apostila-support-focus {
+  border-left: 3px solid rgba(31, 58, 138, 0.28);
+  background: rgba(31, 58, 138, 0.04);
+  border-radius: var(--radius-sm);
+  padding: 0.38rem 0.5rem;
+}
+
+.apostila-support-focus p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.apostila-support-segment {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.34rem 0.45rem;
+}
+
+.apostila-support-segment summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.apostila-media-frame {
+  margin-top: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #f9fafc;
+  overflow: hidden;
+}
+
+.apostila-media-image-frame img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.apostila-media-video-frame video {
+  width: 100%;
+  height: auto;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.apostila-audio-row {
+  margin-top: 0.4rem;
+}
+
+.apostila-audio-row audio {
+  width: 100%;
+}
+
+.apostila-mode-shell {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  padding: 0.9rem;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.apostila-mode-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.55rem;
+}
+
+.apostila-shell-meta {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.apostila-overview-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(31, 58, 138, 0.04), rgba(31, 58, 138, 0));
+  padding: 0.58rem;
+}
+
+.apostila-plan-today {
+  border: 1px solid rgba(31, 58, 138, 0.22);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(31, 58, 138, 0.08), rgba(31, 58, 138, 0.02));
+  padding: 0.62rem;
+  display: grid;
+  gap: 0.52rem;
+}
+
+.apostila-resume-flow {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 0.52rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.apostila-recommendation-block {
+  margin-top: 0.55rem;
+  border: 1px dashed rgba(31, 58, 138, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(31, 58, 138, 0.04);
+  padding: 0.45rem 0.52rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.apostila-badges-row {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+}
+
+.apostila-badge-chip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--muted);
+  padding: 0.16rem 0.48rem;
+  font-size: 0.73rem;
+  line-height: 1.2;
+}
+
+.apostila-shell-grid {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.apostila-shell-grid.is-disabled {
+  opacity: 0.72;
+}
+
+.apostila-shell-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 0.68rem;
+}
+
+.apostila-shell-card h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+}
+
+.apostila-shell-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.apostila-shell-card .simple-list {
+  margin-top: 0.45rem;
+}
+
+.apostila-study-overview-grid {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.apostila-section-cards {
+  margin-bottom: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.apostila-section-cards-title {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.apostila-sections-stream {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.apostila-sections-stream-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.apostila-section-progress-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  overflow: hidden;
+}
+
+.apostila-section-progress-summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 0.5rem 0.62rem;
+  cursor: pointer;
+}
+
+.apostila-section-progress-summary::-webkit-details-marker {
+  display: none;
+}
+
+.apostila-section-progress-summary:hover {
+  background: var(--surface-soft);
+}
+
+.apostila-section-progress-summary h5 {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.apostila-section-progress-summary p {
+  margin: 0.12rem 0 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.apostila-section-progress-summary span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.apostila-section-progress-content {
+  padding: 0 0.62rem 0.62rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.apostila-section-progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.apostila-progress-track {
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.apostila-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #3f67de);
+}
+
+.apostila-section-inline-actions {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: 0.55rem;
+}
+
+.apostila-section-focus-row {
+  margin-top: 0.35rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.apostila-section-focus-row > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.apostila-focus-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.apostila-focus-pill {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  border-radius: var(--radius-pill);
+  padding: 0.18rem 0.52rem;
+  font-size: 0.74rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.apostila-focus-pill:hover {
+  background: rgba(31, 58, 138, 0.08);
+  border-color: rgba(31, 58, 138, 0.28);
+  color: var(--primary);
+}
+
+.apostila-study-session-card h4 {
+  font-size: 1.08rem;
+  color: var(--text);
+  line-height: 1.34;
+  margin-bottom: 0.2rem;
+}
+
+.apostila-mode-actions.is-disabled,
+.apostila-exam-entry-layout.is-disabled {
+  opacity: 0.68;
+}
+
+.apostila-session-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 0.45rem;
+}
+
+.apostila-session-label {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.apostila-session-progress {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.12rem 0.46rem;
+  font-size: 0.76rem;
+  background: var(--surface-soft);
+}
+
+.apostila-session-actions {
+  margin-top: 0.35rem;
+}
+
+.apostila-answer-box {
+  margin: 0.6rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.apostila-answer-box small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.apostila-answer-box strong {
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.apostila-answer-box.is-hidden-answer strong {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.apostila-study-summary-card {
+  margin-top: var(--space-2);
+}
+
+.apostila-study-summary-grid {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.apostila-shell-footnote {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.apostila-reward-block {
+  margin-top: 0.6rem;
+  border: 1px solid rgba(31, 58, 138, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(31, 58, 138, 0.05);
+  padding: 0.52rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.apostila-reward-block .icon-btn {
+  width: fit-content;
+  margin-top: 0.2rem;
+}
+
+.apostila-reward-block p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.apostila-reward-block p strong {
+  color: var(--text);
+}
+
+.apostila-exam-session-card,
+.apostila-exam-summary-card {
+  margin-top: var(--space-2);
+}
+
+.apostila-exam-entry-layout {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.apostila-exam-entry-card {
+  background: linear-gradient(180deg, #fff, rgba(15, 23, 42, 0.015));
+}
+
+.apostila-exam-prompt-box {
+  margin: 0.55rem 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 0.58rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.apostila-exam-prompt-box small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.apostila-exam-prompt-box strong {
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.apostila-exam-history-list {
+  margin-top: 0.55rem;
+}
+
+.apostila-exam-history-card {
+  border-style: solid;
+}
+
+.apostila-exam-history-item {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.apostila-exam-history-head {
+  color: var(--text);
+}
+
+.apostila-exam-history-section {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.apostila-exam-history-metrics {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .dense-tech-list {
@@ -875,6 +1427,62 @@ html.reduce-motion * {
 /* ── Dashboard athlete context section ───────────────────── */
 .dash-athlete-context {
   margin-top: var(--space-4);
+}
+
+.dash-hero {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #f8faff 0%, #f3f6ff 100%);
+  padding: 0.9rem;
+  margin-top: var(--space-2);
+}
+
+.dash-kpi-grid {
+  margin-top: var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.dash-kpi-card {
+  border: 1px solid rgba(31, 58, 138, 0.12);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 0.7rem;
+}
+
+.dash-kpi-card h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.79rem;
+}
+
+.dash-kpi-card strong {
+  display: block;
+  margin-top: 0.24rem;
+  font-size: 1.24rem;
+}
+
+.dash-kpi-card p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dash-block {
+  margin-top: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.dash-block .section-title {
+  margin-top: 0;
+}
+
+.dash-reading-grid {
+  margin-top: var(--space-3);
 }
 
 .dash-grad-progress {
@@ -1570,6 +2178,10 @@ html.reduce-motion * {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .dash-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .split-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1577,6 +2189,37 @@ html.reduce-motion * {
   .filter-row {
     grid-template-columns: 2fr 1fr 1fr;
     align-items: center;
+  }
+
+  .apostila-shell-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .apostila-mode-head {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .apostila-study-overview-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .apostila-exam-entry-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .apostila-plan-today {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+  }
+
+  .apostila-section-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .apostila-shell-card-wide {
+    grid-column: span 2;
   }
 
   .apostila-reading-layout {

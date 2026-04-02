@@ -271,24 +271,184 @@ function normalizeApostilaItemName(nome) {
   return `${upperFirstChar}${text.slice(1)}`;
 }
 
+const PORTUGUESE_CONNECTORS = /\b(com|na|no|nas|nos|de|do|da|dos|das|em|para|pela|pelas|por|contra|partir|guarda|frente|trás|cabeça|cabeça|joelho|barriga|lado|pé|pés)\b/i;
+const JAPANESE_TOKEN_HINT = /\b(gatame|jime|nage|goshi|gari|gaeshi|otoshi|dachi|sabaki|waza|ashi|kesa|sankaku|kote|juji|ude|yoko|kami|ushiro|kata|seoi|kuchiki|kiba|fudo|uki|tomoe|tsuri|harai|uchi|osoto|kosoto|hiza|sukui|okuri|eri|hakada|jigoku)\b/i;
+
+function hasAccent(text) {
+  return /[áàâãéêíóôõúç]/i.test(text);
+}
+
+function isLikelyJapaneseTerm(text) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return false;
+  }
+
+  if (hasAccent(value) || PORTUGUESE_CONNECTORS.test(value)) {
+    return false;
+  }
+
+  return JAPANESE_TOKEN_HINT.test(value) || (/^[A-Za-z\s()0-9.-]+$/.test(value) && value.split(/\s+/).length <= 4);
+}
+
+function splitMeaningFromItemName(displayName) {
+  if (displayName.includes(" - ")) {
+    const [left, ...rightParts] = displayName.split(" - ");
+    return {
+      left: String(left || "").trim(),
+      right: rightParts.join(" - ").trim(),
+    };
+  }
+
+  if (displayName.includes(" = ")) {
+    const [left, ...rightParts] = displayName.split(" = ");
+    return {
+      left: String(left || "").trim(),
+      right: rightParts.join(" = ").trim(),
+    };
+  }
+
+  return { left: displayName, right: "" };
+}
+
+function buildLearningSeed(nome) {
+  const displayName = normalizeApostilaItemName(nome);
+  const split = splitMeaningFromItemName(displayName);
+
+  let japaneseTerm = null;
+  let portugueseLabel = displayName;
+
+  if (split.right && isLikelyJapaneseTerm(split.left)) {
+    japaneseTerm = split.left;
+    portugueseLabel = split.right;
+  } else if (isLikelyJapaneseTerm(displayName)) {
+    japaneseTerm = displayName;
+    portugueseLabel = null;
+  }
+
+  const hasJapanese = Boolean(japaneseTerm);
+  const promptLabel = hasJapanese
+    ? `${japaneseTerm} → qual é o movimento?`
+    : `Movimento: ${displayName}`;
+
+  return {
+    displayName,
+    japaneseTerm,
+    portugueseLabel,
+    promptLabel,
+    hasJapanese,
+  };
+}
+
+function buildNormalizedItemSupport(seed = {}) {
+  const mediaImageUrl = seed?.mediaImageUrl || null;
+  const mediaImagePublicId = seed?.mediaImagePublicId || null;
+  const mediaVideoUrl = seed?.mediaVideoUrl || null;
+  const mediaVideoPublicId = seed?.mediaVideoPublicId || null;
+  const mediaAudioUrl = seed?.mediaAudioUrl || null;
+  const mediaAudioPublicId = seed?.mediaAudioPublicId || null;
+  const mediaCaption = seed?.mediaCaption || null;
+
+  const mediaTypeAvailable = Array.isArray(seed?.mediaTypeAvailable)
+    ? seed.mediaTypeAvailable
+    : [
+        mediaImageUrl ? "image" : null,
+        mediaVideoUrl ? "video" : null,
+        mediaAudioUrl ? "audio" : null,
+      ].filter(Boolean);
+
+  const media = {
+    imageUrl: mediaImageUrl,
+    imagePublicId: mediaImagePublicId,
+    videoUrl: mediaVideoUrl,
+    videoPublicId: mediaVideoPublicId,
+    audioUrl: mediaAudioUrl,
+    audioPublicId: mediaAudioPublicId,
+    caption: mediaCaption,
+    mediaTypeAvailable,
+  };
+
+  const hint = {
+    mnemonicHint: seed?.mnemonicHint || null,
+    pronunciationHint: seed?.pronunciationHint || null,
+    visualCueLabel: seed?.visualCueLabel || null,
+  };
+
+  return {
+    mediaImageUrl,
+    mediaImagePublicId,
+    mediaVideoUrl,
+    mediaVideoPublicId,
+    mediaAudioUrl,
+    mediaAudioPublicId,
+    mediaCaption,
+    mediaTypeAvailable,
+    mnemonicHint: hint.mnemonicHint,
+    pronunciationHint: hint.pronunciationHint,
+    visualCueLabel: hint.visualCueLabel,
+    media,
+    hint,
+  };
+}
+
+export function getItemImageUrl(item) {
+  return String(item?.media?.imageUrl || item?.mediaImageUrl || "").trim();
+}
+
+export function getItemVideoUrl(item) {
+  return String(item?.media?.videoUrl || item?.mediaVideoUrl || "").trim();
+}
+
+export function getItemAudioUrl(item) {
+  return String(item?.media?.audioUrl || item?.mediaAudioUrl || "").trim();
+}
+
+export function hasAnyMedia(item) {
+  return Boolean(getItemImageUrl(item) || getItemVideoUrl(item) || getItemAudioUrl(item));
+}
+
+export function getPrimaryMediaType(item) {
+  if (getItemImageUrl(item)) {
+    return "image";
+  }
+  if (getItemVideoUrl(item)) {
+    return "video";
+  }
+  if (getItemAudioUrl(item)) {
+    return "audio";
+  }
+  return null;
+}
+
 export const apostilaSections = orderedSections.map((section, sectionIndex) => {
   const ordemSecao = sectionIndex + 1;
 
-  const itens = section.itens.map((nome, itemIndex) => ({
-    id: `${section.id}-${String(itemIndex + 1).padStart(2, "0")}`,
-    nome: normalizeApostilaItemName(nome),
-    categoria: section.categoria,
-    linhaGrupo: section.titulo,
-    secaoId: section.id,
-    secaoTitulo: section.titulo,
-    ordemSecao,
-    ordemItem: itemIndex + 1,
-    significado: "",
-    detalhesExecucao: "",
-    pontosDeAtencao: "",
-    errosComuns: "",
-    observacoesDoProfessor: "",
-  }));
+  const itens = section.itens.map((nome, itemIndex) => {
+    const learningSeed = buildLearningSeed(nome);
+    const supportSeed = buildNormalizedItemSupport();
+
+    return {
+      id: `${section.id}-${String(itemIndex + 1).padStart(2, "0")}`,
+      nome: learningSeed.displayName,
+      displayName: learningSeed.displayName,
+      japaneseTerm: learningSeed.japaneseTerm,
+      portugueseLabel: learningSeed.portugueseLabel,
+      promptLabel: learningSeed.promptLabel,
+      hasJapanese: learningSeed.hasJapanese,
+      ...supportSeed,
+      categoria: section.categoria,
+      linhaGrupo: section.titulo,
+      secaoId: section.id,
+      secaoTitulo: section.titulo,
+      ordemSecao,
+      ordemItem: itemIndex + 1,
+      significado: "",
+      detalhesExecucao: "",
+      pontosDeAtencao: "",
+      errosComuns: "",
+      observacoesDoProfessor: "",
+    };
+  });
 
   return {
     ...section,

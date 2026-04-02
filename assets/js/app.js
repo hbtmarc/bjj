@@ -26,6 +26,15 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CLOUDINARY_CLOUD_NAME = "dhbybowgp";
 const CLOUDINARY_UPLOAD_PRESET = "avatar_perfil_unsigned";
+const MASTERY_FAMILIARITY_THRESHOLD = 3;
+const MASTERY_STREAK_THRESHOLD = 2;
+const BADGE_CATALOG = {
+  first5_mastered: "Primeiros 5 itens dominados",
+  first_section_done: "Primeira seção concluída",
+  streak_3_days: "3 dias seguidos",
+  first_exam_done: "1º simulado concluído",
+  perfect_section_review: "Revisão perfeita de uma seção",
+};
 
 function uploadAvatarToCloudinary(file, onProgress) {
   return new Promise((resolve, reject) => {
@@ -87,9 +96,46 @@ const state = {
     perfil: null,
     treinos: [],
     progressoApostila: {},
+    apostilaStudy: {},
+    apostilaExamSessions: [],
+    apostilaMediaUsage: {},
+    apostilaFlow: {
+      lastMode: "",
+      lastSectionId: "",
+      lastActiveAt: 0,
+      lastRecommendedAction: "",
+    },
+    apostilaGamification: {
+      streakCurrent: 0,
+      streakBest: 0,
+      lastStudyDay: "",
+      badgesUnlocked: {},
+      sectionsReady: {},
+    },
+    gamificationOverview: {
+      streakCurrent: 0,
+      streakBest: 0,
+      overallReadinessPct: 0,
+      sectionsReadyCount: 0,
+      readinessBySection: {},
+      weakestSection: null,
+      todayPlan: null,
+      resumeFlow: null,
+      recommendation: null,
+      nextRecommendationLabel: "Revisar itens pendentes",
+      badgesUnlockedList: [],
+    },
     historicoGraduacoes: [],
     apostilaItemsComProgresso: [],
     apostilaSections,
+    studyInsights: {
+      totalItems: apostilaItems.length,
+      pendingItems: 0,
+      masteredItems: 0,
+      weakItems: 0,
+      averageFamiliarity: 0,
+      sections: [],
+    },
     tecnicasFiltradas: [],
     metrics: {
       treinos7d: 0,
@@ -106,6 +152,11 @@ const state = {
       perfil: false,
       treinos: false,
       progressoApostila: false,
+      apostilaStudy: false,
+      apostilaExam: false,
+      apostilaMediaUsage: false,
+      apostilaFlow: false,
+      apostilaGamification: false,
       historicoGraduacoes: false,
     },
   },
@@ -114,6 +165,13 @@ const state = {
     filtroTecnicaTexto: "",
     filtroTecnicaCategoria: "",
     filtroSomenteFavoritas: false,
+    apostilaModo: "ler",
+    apostilaStudySession: null,
+    apostilaExamSession: null,
+    apostilaSupportItemId: null,
+    apostilaSupportContext: "",
+    apostilaStudySupportVisible: false,
+    apostilaExamSupportVisible: false,
     perfilSecaoAberta: null,
   },
   feedback: {
@@ -317,6 +375,644 @@ function sanitizeTreino(item) {
   };
 }
 
+function normalizeStudyProgressEntry(entry) {
+  return {
+    familiarity: Number(entry?.familiarity || 0),
+    lastSeenAt: Number(entry?.lastSeenAt || 0),
+    lastResult: String(entry?.lastResult || ""),
+    lastWrongAt: Number(entry?.lastWrongAt || 0),
+    streak: Number(entry?.streak || 0),
+    dueAt: Number(entry?.dueAt || 0),
+    totalCorrect: Number(entry?.totalCorrect || 0),
+    totalWrong: Number(entry?.totalWrong || 0),
+    totalSkipped: Number(entry?.totalSkipped || 0),
+  };
+}
+
+function normalizeGamificationEntry(entry) {
+  const badges = entry?.badgesUnlocked && typeof entry.badgesUnlocked === "object" ? entry.badgesUnlocked : {};
+  const sectionsReady = entry?.sectionsReady && typeof entry.sectionsReady === "object" ? entry.sectionsReady : {};
+  return {
+    streakCurrent: Number(entry?.streakCurrent || 0),
+    streakBest: Number(entry?.streakBest || 0),
+    lastStudyDay: String(entry?.lastStudyDay || ""),
+    badgesUnlocked: badges,
+    sectionsReady,
+  };
+}
+
+function normalizeApostilaFlowEntry(entry) {
+  return {
+    lastMode: String(entry?.lastMode || ""),
+    lastSectionId: String(entry?.lastSectionId || ""),
+    lastActiveAt: Number(entry?.lastActiveAt || 0),
+    lastRecommendedAction: String(entry?.lastRecommendedAction || ""),
+  };
+}
+
+function normalizeMediaUsageEntry(entry) {
+  return {
+    lastOpenedAt: Number(entry?.lastOpenedAt || 0),
+    mediaViewedImage: Boolean(entry?.mediaViewedImage),
+    mediaViewedVideo: Boolean(entry?.mediaViewedVideo),
+    mediaPlayedAudio: Boolean(entry?.mediaPlayedAudio),
+    hintViewed: Boolean(entry?.hintViewed),
+    openedCount: Number(entry?.openedCount || 0),
+  };
+}
+
+function getLocalDayKey(timestampMs = Date.now()) {
+  const date = new Date(timestampMs);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getDayDiff(previousDayKey, currentDayKey) {
+  if (!previousDayKey || !currentDayKey) {
+    return 0;
+  }
+
+  const prev = new Date(`${previousDayKey}T00:00:00`);
+  const curr = new Date(`${currentDayKey}T00:00:00`);
+  if (Number.isNaN(prev.getTime()) || Number.isNaN(curr.getTime())) {
+    return 0;
+  }
+
+  return Math.round((curr.getTime() - prev.getTime()) / DAY_MS);
+}
+
+function isStudyItemMastered(progress) {
+  return progress.familiarity >= MASTERY_FAMILIARITY_THRESHOLD
+    && progress.totalCorrect > progress.totalWrong
+    && progress.streak >= MASTERY_STREAK_THRESHOLD;
+}
+
+function isStudyItemWeak(progress, nowMs = Date.now()) {
+  const recentWrong = progress.lastWrongAt > 0 && nowMs - progress.lastWrongAt <= 14 * DAY_MS;
+  return progress.familiarity <= 1
+    || progress.totalWrong > progress.totalCorrect
+    || (progress.lastResult === "wrong" && recentWrong)
+    || progress.streak <= 0;
+}
+
+function computeStudyInsights() {
+  const sections = [...(state.data.apostilaSections || [])].sort((a, b) => (a.ordemSecao || 0) - (b.ordemSecao || 0));
+  const now = Date.now();
+
+  let totalItems = 0;
+  let pendingItems = 0;
+  let masteredItems = 0;
+  let weakItems = 0;
+  let totalFamiliarity = 0;
+
+  const sectionInsights = sections.map((section) => {
+    const items = [...(section.itens || [])].sort((a, b) => (a.ordemItem || 0) - (b.ordemItem || 0));
+    let studied = 0;
+    let mastered = 0;
+    let weak = 0;
+    let familiaritySum = 0;
+
+    items.forEach((item) => {
+      const progress = normalizeStudyProgressEntry(state.data.apostilaStudy?.[item.id]);
+      const isStudied = progress.lastSeenAt > 0 || progress.totalCorrect > 0 || progress.totalWrong > 0 || progress.totalSkipped > 0;
+      const isMastered = isStudyItemMastered(progress);
+      const isWeak = isStudyItemWeak(progress, now);
+      const isPending = progress.dueAt > 0 ? progress.dueAt <= now : !isMastered;
+
+      totalItems += 1;
+      familiaritySum += progress.familiarity;
+      totalFamiliarity += progress.familiarity;
+
+      if (isStudied) {
+        studied += 1;
+      }
+      if (isMastered) {
+        mastered += 1;
+        masteredItems += 1;
+      }
+      if (isWeak) {
+        weak += 1;
+        weakItems += 1;
+      }
+      if (isPending) {
+        pendingItems += 1;
+      }
+    });
+
+    const averageFamiliarity = items.length ? familiaritySum / items.length : 0;
+    const progressPct = items.length ? Math.round((mastered / items.length) * 100) : 0;
+
+    return {
+      id: section.id,
+      ordemSecao: section.ordemSecao,
+      titulo: section.titulo,
+      totalItems: items.length,
+      studiedItems: studied,
+      masteredItems: mastered,
+      weakItems: weak,
+      averageFamiliarity,
+      progressPct,
+    };
+  });
+
+  state.data.studyInsights = {
+    totalItems,
+    pendingItems,
+    masteredItems,
+    weakItems,
+    averageFamiliarity: totalItems ? totalFamiliarity / totalItems : 0,
+    sections: sectionInsights,
+  };
+
+  computeGamificationOverview();
+}
+
+function buildReadinessLabelForSection(sectionInsight) {
+  const total = Number(sectionInsight.totalItems || 0);
+  const studied = Number(sectionInsight.studiedItems || 0);
+  const mastered = Number(sectionInsight.masteredItems || 0);
+  const weak = Number(sectionInsight.weakItems || 0);
+  const avgFam = Number(sectionInsight.averageFamiliarity || 0);
+  const masteredRatio = total > 0 ? mastered / total : 0;
+
+  const section = (state.data.apostilaSections || []).find((item) => item.id === sectionInsight.id);
+  const recentActiveItems = (section?.itens || []).reduce((acc, item) => {
+    const progress = normalizeStudyProgressEntry(state.data.apostilaStudy?.[item.id]);
+    if (progress.lastSeenAt > 0 && Date.now() - progress.lastSeenAt <= 7 * DAY_MS) {
+      return acc + 1;
+    }
+    return acc;
+  }, 0);
+
+  if (studied === 0) {
+    return "Não iniciada";
+  }
+
+  if (
+    masteredRatio >= 0.75
+    && avgFam >= 3.2
+    && weak <= 1
+    && recentActiveItems >= Math.max(1, Math.ceil(total * 0.35))
+  ) {
+    return "Pronta para simulado";
+  }
+
+  if (
+    masteredRatio >= 0.55
+    && avgFam >= 2.6
+    && weak <= Math.max(2, Math.ceil(total * 0.2))
+  ) {
+    return "Quase pronta";
+  }
+
+  return "Em progresso";
+}
+
+function computeGamificationOverview() {
+  const sectionInsights = state.data.studyInsights?.sections || [];
+  const readinessBySection = {};
+  let sectionsReadyCount = 0;
+
+  sectionInsights.forEach((sectionInsight) => {
+    const status = buildReadinessLabelForSection(sectionInsight);
+    readinessBySection[sectionInsight.id] = status;
+    if (status === "Pronta para simulado") {
+      sectionsReadyCount += 1;
+    }
+  });
+
+  const totalSections = sectionInsights.length;
+  const totalItems = Number(state.data.studyInsights?.totalItems || 0);
+  const overallReadinessPct = totalSections > 0 ? Math.round((sectionsReadyCount / totalSections) * 100) : 0;
+  const pendingItems = Number(state.data.studyInsights?.pendingItems || 0);
+  const weakestSection = [...sectionInsights]
+    .sort((a, b) => {
+      if ((a.weakItems || 0) !== (b.weakItems || 0)) {
+        return (b.weakItems || 0) - (a.weakItems || 0);
+      }
+      return (a.progressPct || 0) - (b.progressPct || 0);
+    })[0] || null;
+  const pendingHighThreshold = Math.max(8, Math.ceil(totalItems * 0.1));
+  const hasHighPending = pendingItems >= pendingHighThreshold;
+  const hasWeakSectionPressure = Boolean(weakestSection && Number(weakestSection.weakItems || 0) >= Math.max(3, Math.ceil(Number(weakestSection.totalItems || 0) * 0.25)));
+  const continueOrderSection = [...sectionInsights]
+    .filter((section) => readinessBySection[section.id] !== "Pronta para simulado")
+    .sort((a, b) => (a.ordemSecao || 0) - (b.ordemSecao || 0))[0] || null;
+  const simuladoTarget = [...sectionInsights]
+    .filter((section) => readinessBySection[section.id] === "Pronta para simulado" || readinessBySection[section.id] === "Quase pronta")
+    .sort((a, b) => {
+      if ((b.progressPct || 0) !== (a.progressPct || 0)) {
+        return (b.progressPct || 0) - (a.progressPct || 0);
+      }
+      return (a.ordemSecao || 0) - (b.ordemSecao || 0);
+    })[0] || null;
+
+  let recommendation = {
+    type: "pending",
+    title: "Revisar itens pendentes",
+    description: "Priorize os itens com revisão em atraso para manter continuidade.",
+    sectionId: null,
+  };
+
+  if (!hasHighPending && hasWeakSectionPressure && weakestSection) {
+    recommendation = {
+      type: "weak_section",
+      title: "Reforçar seção fraca",
+      description: `Focar ${weakestSection.ordemSecao}. ${weakestSection.titulo}.`,
+      sectionId: weakestSection.id,
+    };
+  }
+
+  if (!hasHighPending && !hasWeakSectionPressure && simuladoTarget) {
+    recommendation = {
+      type: "exam_section",
+      title: "Fazer simulado por seção",
+      description: `Simule ${simuladoTarget.ordemSecao}. ${simuladoTarget.titulo}.`,
+      sectionId: simuladoTarget.id,
+    };
+  }
+
+  if (!hasHighPending && !hasWeakSectionPressure && !simuladoTarget && continueOrderSection) {
+    recommendation = {
+      type: "continue_order",
+      title: "Continuar estudo em ordem oficial",
+      description: `Avance por ${continueOrderSection.ordemSecao}. ${continueOrderSection.titulo}.`,
+      sectionId: continueOrderSection.id,
+    };
+  }
+
+  const gamif = normalizeGamificationEntry(state.data.apostilaGamification);
+  const flow = normalizeApostilaFlowEntry(state.data.apostilaFlow);
+  const isResumeRecent = flow.lastActiveAt > 0 && (Date.now() - flow.lastActiveAt) <= 36 * 60 * 60 * 1000;
+  const resumeFlow = isResumeRecent && flow.lastMode
+    ? {
+        lastMode: flow.lastMode,
+        lastSectionId: flow.lastSectionId || "",
+        lastActiveAt: flow.lastActiveAt,
+      }
+    : null;
+
+  const todayPlan = {
+    prioridade: recommendation.title,
+    pendingItems,
+    weakestSection: weakestSection
+      ? {
+          id: weakestSection.id,
+          label: `${weakestSection.ordemSecao}. ${weakestSection.titulo}`,
+          weakItems: Number(weakestSection.weakItems || 0),
+        }
+      : null,
+    recommendation,
+  };
+  const badgesUnlockedList = Object.keys(gamif.badgesUnlocked || {})
+    .filter((badgeId) => BADGE_CATALOG[badgeId])
+    .map((badgeId) => ({
+      id: badgeId,
+      label: BADGE_CATALOG[badgeId],
+      unlockedAt: Number(gamif.badgesUnlocked[badgeId] || 0),
+    }))
+    .sort((a, b) => (b.unlockedAt || 0) - (a.unlockedAt || 0));
+
+  state.data.gamificationOverview = {
+    streakCurrent: Number(gamif.streakCurrent || 0),
+    streakBest: Number(gamif.streakBest || 0),
+    overallReadinessPct,
+    sectionsReadyCount,
+    readinessBySection,
+    weakestSection: todayPlan.weakestSection,
+    todayPlan,
+    resumeFlow,
+    recommendation,
+    nextRecommendationLabel: recommendation.title,
+    badgesUnlockedList,
+  };
+}
+
+async function patchApostilaGamification(patch) {
+  if (!state.user) {
+    return;
+  }
+
+  const current = normalizeGamificationEntry(state.data.apostilaGamification);
+  state.data.apostilaGamification = {
+    ...current,
+    ...patch,
+    badgesUnlocked: {
+      ...(current.badgesUnlocked || {}),
+      ...(patch.badgesUnlocked || {}),
+    },
+    sectionsReady: {
+      ...(current.sectionsReady || {}),
+      ...(patch.sectionsReady || {}),
+    },
+  };
+  computeGamificationOverview();
+
+  try {
+    const gamificationRef = ref(db, `users/${state.user.uid}/apostilaGamification`);
+    await update(gamificationRef, patch);
+  } catch {
+    setRouteFeedback("apostila", "Falha ao atualizar dados de motivação.", "error");
+  }
+}
+
+async function patchApostilaFlow(patch) {
+  if (!state.user) {
+    return;
+  }
+
+  const current = normalizeApostilaFlowEntry(state.data.apostilaFlow);
+  state.data.apostilaFlow = {
+    ...current,
+    ...patch,
+  };
+  computeGamificationOverview();
+
+  try {
+    const flowRef = ref(db, `users/${state.user.uid}/apostilaFlow`);
+    await update(flowRef, patch);
+  } catch {
+    setRouteFeedback("apostila", "Falha ao atualizar fluxo de aprendizado.", "error");
+  }
+}
+
+function registerApostilaFlowActivity({ mode, sectionId = "", recommendedAction = "" }) {
+  patchApostilaFlow({
+    lastMode: String(mode || ""),
+    lastSectionId: String(sectionId || ""),
+    lastActiveAt: Date.now(),
+    lastRecommendedAction: String(recommendedAction || ""),
+  });
+}
+
+function runGuidedRecommendationAction(actionType, sectionId = "") {
+  if (actionType === "pending") {
+    startApostilaStudySession({ mode: "pending", sectionId: "", sourceAction: "pending" });
+    return;
+  }
+
+  if (actionType === "weak_section" || actionType === "continue_order") {
+    startApostilaStudySession({ mode: "section", sectionId, sourceAction: actionType });
+    return;
+  }
+
+  if (actionType === "exam_section") {
+    state.ui.apostilaModo = "simulado";
+    startApostilaExamSession({ mode: "section", sectionId, promptStyle: "mov_to_jp", sourceAction: actionType });
+    return;
+  }
+
+  startApostilaStudySession({ mode: "pending", sectionId: "", sourceAction: "pending" });
+}
+
+function resumeLastApostilaFlow() {
+  const flow = normalizeApostilaFlowEntry(state.data.apostilaFlow);
+  if (!flow.lastMode) {
+    return;
+  }
+
+  if (flow.lastMode === "exam_section") {
+    state.ui.apostilaModo = "simulado";
+    startApostilaExamSession({ mode: "section", sectionId: flow.lastSectionId, promptStyle: "mov_to_jp", sourceAction: "resume" });
+    return;
+  }
+
+  if (flow.lastMode === "exam_full") {
+    state.ui.apostilaModo = "simulado";
+    startApostilaExamSession({ mode: "full", sectionId: "", promptStyle: "mov_to_jp", sourceAction: "resume" });
+    return;
+  }
+
+  if (flow.lastMode === "pending" || flow.lastMode === "jp_to_mov" || flow.lastMode === "mov_to_jp") {
+    state.ui.apostilaModo = "estudar";
+    startApostilaStudySession({ mode: flow.lastMode, sectionId: "", sourceAction: "resume" });
+    return;
+  }
+
+  state.ui.apostilaModo = "estudar";
+  startApostilaStudySession({ mode: "section", sectionId: flow.lastSectionId, sourceAction: "resume" });
+}
+
+async function registerApostilaMediaUsage(itemId, markerType) {
+  if (!state.user || !itemId) {
+    return;
+  }
+
+  const key = String(itemId || "").trim();
+  if (!key) {
+    return;
+  }
+
+  const current = normalizeMediaUsageEntry(state.data.apostilaMediaUsage?.[key]);
+  const now = Date.now();
+  const patch = {};
+
+  if (markerType === "opened") {
+    patch.lastOpenedAt = now;
+    patch.openedCount = Number(current.openedCount || 0) + 1;
+  }
+  if (markerType === "image") {
+    patch.mediaViewedImage = true;
+  }
+  if (markerType === "video") {
+    patch.mediaViewedVideo = true;
+  }
+  if (markerType === "audio") {
+    patch.mediaPlayedAudio = true;
+  }
+  if (markerType === "hint") {
+    patch.hintViewed = true;
+  }
+
+  if (!Object.keys(patch).length) {
+    return;
+  }
+
+  state.data.apostilaMediaUsage = {
+    ...(state.data.apostilaMediaUsage || {}),
+    [key]: {
+      ...current,
+      ...patch,
+    },
+  };
+
+  try {
+    const usageRef = ref(db, `users/${state.user.uid}/apostilaMediaUsage/${key}`);
+    await update(usageRef, patch);
+  } catch {
+    setRouteFeedback("apostila", "Falha ao registrar uso de mídia de apoio.", "error");
+  }
+}
+
+async function unlockGamificationBadges(badgeIds) {
+  const ids = Array.from(new Set((badgeIds || []).filter(Boolean)));
+  if (!ids.length) {
+    return [];
+  }
+
+  const current = normalizeGamificationEntry(state.data.apostilaGamification);
+  const now = Date.now();
+  const newBadgesPatch = {};
+  const earnedNow = [];
+
+  ids.forEach((id) => {
+    if (!BADGE_CATALOG[id]) {
+      return;
+    }
+    if (!current.badgesUnlocked?.[id]) {
+      newBadgesPatch[id] = now;
+      earnedNow.push(BADGE_CATALOG[id]);
+    }
+  });
+
+  if (!Object.keys(newBadgesPatch).length) {
+    return [];
+  }
+
+  await patchApostilaGamification({
+    badgesUnlocked: {
+      ...(current.badgesUnlocked || {}),
+      ...newBadgesPatch,
+    },
+  });
+
+  return earnedNow;
+}
+
+async function applyStudyStreakUpdate() {
+  const current = normalizeGamificationEntry(state.data.apostilaGamification);
+  const today = getLocalDayKey();
+  const lastDay = String(current.lastStudyDay || "");
+
+  if (lastDay === today) {
+    return {
+      updated: false,
+      streakCurrent: Number(current.streakCurrent || 0),
+      streakBest: Number(current.streakBest || 0),
+      impactText: "Sequência mantida hoje.",
+    };
+  }
+
+  const diff = lastDay ? getDayDiff(lastDay, today) : 0;
+  const nextCurrent = !lastDay
+    ? 1
+    : diff <= 1
+      ? Number(current.streakCurrent || 0) + 1
+      : 1;
+  const nextBest = Math.max(Number(current.streakBest || 0), nextCurrent);
+  const impactText = !lastDay
+    ? "Sequência iniciada: 1 dia."
+    : diff <= 1
+      ? `Sequência aumentou para ${nextCurrent} dia(s).`
+      : "Sequência reiniciada após pausa.";
+
+  await patchApostilaGamification({
+    streakCurrent: nextCurrent,
+    streakBest: nextBest,
+    lastStudyDay: today,
+  });
+
+  return {
+    updated: true,
+    streakCurrent: nextCurrent,
+    streakBest: nextBest,
+    impactText,
+  };
+}
+
+async function evaluateDerivedBadges({ perfectSectionReview = false, examCompleted = false } = {}) {
+  const overview = state.data.gamificationOverview || {};
+  const newlyEligible = [];
+
+  if (Number(state.data.studyInsights?.masteredItems || 0) >= 5) {
+    newlyEligible.push("first5_mastered");
+  }
+  if (Number(overview.sectionsReadyCount || 0) >= 1) {
+    newlyEligible.push("first_section_done");
+  }
+  if (Number(overview.streakCurrent || 0) >= 3 || Number(overview.streakBest || 0) >= 3) {
+    newlyEligible.push("streak_3_days");
+  }
+  if (examCompleted || (state.data.apostilaExamSessions || []).length > 0) {
+    newlyEligible.push("first_exam_done");
+  }
+  if (perfectSectionReview) {
+    newlyEligible.push("perfect_section_review");
+  }
+
+  return unlockGamificationBadges(newlyEligible);
+}
+
+function buildNextActionLabel() {
+  const recommendation = state.data.gamificationOverview?.recommendation;
+  if (!recommendation) {
+    return "Revisar itens pendentes";
+  }
+  return recommendation.title;
+}
+
+function buildStudyRewardFeedback(session, streakInfo, badgesEarnedNow) {
+  const stats = session?.sessionStats || {};
+  const completed = Number(stats.completed || 0);
+  const correct = Number(stats.correct || 0);
+  const wrong = Number(stats.wrong || 0);
+  const skipped = Number(stats.skipped || 0);
+  const acc = completed > 0 ? Math.round((correct / completed) * 100) : 0;
+  const recommendation = state.data.gamificationOverview?.recommendation || null;
+
+  return {
+    title: "Sessão concluída com consistência",
+    progressText: `${completed} itens · ${correct} acertos · ${wrong} erros · ${acc}% de acerto`,
+    improvedText: `Você consolidou ${correct} item(ns) nesta rodada.`,
+    weakText: wrong + skipped > 0 ? `${wrong + skipped} item(ns) ainda pedem reforço imediato.` : "Sem pontos críticos nesta sessão.",
+    streakText: streakInfo?.impactText || "Sequência registrada.",
+    badgeEarned: badgesEarnedNow?.[0] || "",
+    nextAction: buildNextActionLabel(),
+    nextActionType: recommendation?.type || "pending",
+    nextActionSectionId: recommendation?.sectionId || "",
+  };
+}
+
+function buildExamRewardFeedback(session, badgesEarnedNow) {
+  const total = Number(session?.queue?.length || 0);
+  const stats = session?.examStats || {};
+  const correct = Number(stats.correct || 0);
+  const wrong = Number(stats.wrong || 0);
+  const skipped = Number(stats.skipped || 0);
+  const acc = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const recommendation = state.data.gamificationOverview?.recommendation || null;
+
+  return {
+    title: "Simulado finalizado",
+    progressText: `${total} itens · ${correct} acertos · ${wrong} erros · ${skipped} pulados · ${acc}%`,
+    improvedText: `Desempenho consolidado com ${correct} resposta(s) corretas.`,
+    weakText: wrong + skipped > 0 ? `${wrong + skipped} item(ns) merecem revisão dirigida.` : "Ótimo sinal: sem fragilidades evidentes neste simulado.",
+    streakText: "A consistência diária fortalece retenção de longo prazo.",
+    badgeEarned: badgesEarnedNow?.[0] || "",
+    nextAction: buildNextActionLabel(),
+    nextActionType: recommendation?.type || "pending",
+    nextActionSectionId: recommendation?.sectionId || "",
+  };
+}
+
+function normalizeExamSessionEntry(entry) {
+  return {
+    mode: String(entry?.mode || ""),
+    selectedSectionId: entry?.selectedSectionId ? String(entry.selectedSectionId) : null,
+    promptStyle: String(entry?.promptStyle || "mov_to_jp"),
+    startedAt: Number(entry?.startedAt || 0),
+    finishedAt: Number(entry?.finishedAt || 0),
+    score: Number(entry?.score || 0),
+    totalItems: Number(entry?.totalItems || 0),
+    correct: Number(entry?.correct || 0),
+    wrong: Number(entry?.wrong || 0),
+    skipped: Number(entry?.skipped || 0),
+    mistakes: Array.isArray(entry?.mistakes) ? entry.mistakes.map((item) => String(item || "")).filter(Boolean) : [],
+  };
+}
+
 function sortTreinosNewestFirst(items) {
   return items.sort((left, right) => {
     if (left.dataMs !== right.dataMs) {
@@ -488,11 +1184,21 @@ function bindRealtimeData(user) {
   const perfilRef = ref(db, `users/${user.uid}/perfil`);
   const treinosRef = ref(db, `users/${user.uid}/treinos`);
   const progressoRef = ref(db, `users/${user.uid}/progressoApostila`);
+  const apostilaStudyRef = ref(db, `users/${user.uid}/apostilaStudy`);
+  const apostilaExamRef = ref(db, `users/${user.uid}/apostilaExam`);
+  const apostilaMediaUsageRef = ref(db, `users/${user.uid}/apostilaMediaUsage`);
+  const apostilaFlowRef = ref(db, `users/${user.uid}/apostilaFlow`);
+  const gamificationRef = ref(db, `users/${user.uid}/apostilaGamification`);
   const historicoRef = ref(db, `users/${user.uid}/historicoGraduacoes`);
 
   setLoading("perfil", true);
   setLoading("treinos", true);
   setLoading("progressoApostila", true);
+  setLoading("apostilaStudy", true);
+  setLoading("apostilaExam", true);
+  setLoading("apostilaMediaUsage", true);
+  setLoading("apostilaFlow", true);
+  setLoading("apostilaGamification", true);
   setLoading("historicoGraduacoes", true);
 
   const stopPerfil = onValue(
@@ -555,7 +1261,93 @@ function bindRealtimeData(user) {
     }
   );
 
-  state.listeners = [stopPerfil, stopHistorico, stopTreinos, stopProgresso];
+  const stopApostilaStudy = onValue(
+    apostilaStudyRef,
+    (snapshot) => {
+      const raw = snapshot.val() || {};
+      const normalized = {};
+
+      Object.entries(raw).forEach(([itemId, value]) => {
+        normalized[itemId] = normalizeStudyProgressEntry(value);
+      });
+
+      state.data.apostilaStudy = normalized;
+      computeStudyInsights();
+      setLoading("apostilaStudy", false);
+      rerender();
+    },
+    () => {
+      setLoading("apostilaStudy", false);
+      rerender();
+    }
+  );
+
+  const stopApostilaExam = onValue(
+    apostilaExamRef,
+    (snapshot) => {
+      state.data.apostilaExamSessions = parseCollection(snapshot.val()).sort((a, b) => {
+        return Number(b.startedAt || 0) - Number(a.startedAt || 0);
+      }).map((entry) => ({
+        id: entry.id,
+        ...normalizeExamSessionEntry(entry),
+      }));
+      computeGamificationOverview();
+      setLoading("apostilaExam", false);
+      rerender();
+    },
+    () => {
+      setLoading("apostilaExam", false);
+      rerender();
+    }
+  );
+
+  const stopApostilaMediaUsage = onValue(
+    apostilaMediaUsageRef,
+    (snapshot) => {
+      const raw = snapshot.val() || {};
+      const normalized = {};
+      Object.entries(raw).forEach(([itemId, value]) => {
+        normalized[itemId] = normalizeMediaUsageEntry(value);
+      });
+      state.data.apostilaMediaUsage = normalized;
+      setLoading("apostilaMediaUsage", false);
+      rerender();
+    },
+    () => {
+      setLoading("apostilaMediaUsage", false);
+      rerender();
+    }
+  );
+
+  const stopApostilaFlow = onValue(
+    apostilaFlowRef,
+    (snapshot) => {
+      state.data.apostilaFlow = normalizeApostilaFlowEntry(snapshot.val() || {});
+      computeGamificationOverview();
+      setLoading("apostilaFlow", false);
+      rerender();
+    },
+    () => {
+      setLoading("apostilaFlow", false);
+      rerender();
+    }
+  );
+
+  const stopApostilaGamification = onValue(
+    gamificationRef,
+    (snapshot) => {
+      state.data.apostilaGamification = normalizeGamificationEntry(snapshot.val() || {});
+      computeGamificationOverview();
+      setLoading("apostilaGamification", false);
+      rerender();
+    },
+    () => {
+      setLoading("apostilaGamification", false);
+      rerender();
+    }
+  );
+
+  state.listeners = [stopPerfil, stopHistorico, stopTreinos, stopProgresso, stopApostilaStudy, stopApostilaExam, stopApostilaMediaUsage, stopApostilaFlow, stopApostilaGamification];
 }
 
 function resetPrivateData() {
@@ -563,8 +1355,45 @@ function resetPrivateData() {
   state.data.perfil = null;
   state.data.treinos = [];
   state.data.progressoApostila = {};
+  state.data.apostilaStudy = {};
+  state.data.apostilaExamSessions = [];
+  state.data.apostilaMediaUsage = {};
+  state.data.apostilaFlow = {
+    lastMode: "",
+    lastSectionId: "",
+    lastActiveAt: 0,
+    lastRecommendedAction: "",
+  };
+  state.data.apostilaGamification = {
+    streakCurrent: 0,
+    streakBest: 0,
+    lastStudyDay: "",
+    badgesUnlocked: {},
+    sectionsReady: {},
+  };
+  state.data.gamificationOverview = {
+    streakCurrent: 0,
+    streakBest: 0,
+    overallReadinessPct: 0,
+    sectionsReadyCount: 0,
+    readinessBySection: {},
+    weakestSection: null,
+    todayPlan: null,
+    resumeFlow: null,
+    recommendation: null,
+    nextRecommendationLabel: "Revisar itens pendentes",
+    badgesUnlockedList: [],
+  };
   state.data.historicoGraduacoes = [];
   state.data.apostilaItemsComProgresso = [];
+  state.data.studyInsights = {
+    totalItems: apostilaItems.length,
+    pendingItems: 0,
+    masteredItems: 0,
+    weakItems: 0,
+    averageFamiliarity: 0,
+    sections: [],
+  };
   state.data.tecnicasFiltradas = [];
   state.data.metrics = {
     treinos7d: 0,
@@ -581,6 +1410,11 @@ function resetPrivateData() {
     perfil: false,
     treinos: false,
     progressoApostila: false,
+    apostilaStudy: false,
+    apostilaExam: false,
+    apostilaMediaUsage: false,
+    apostilaFlow: false,
+    apostilaGamification: false,
     historicoGraduacoes: false,
   };
   state.ui = {
@@ -588,6 +1422,13 @@ function resetPrivateData() {
     filtroTecnicaTexto: "",
     filtroTecnicaCategoria: "",
     filtroSomenteFavoritas: false,
+    apostilaModo: "ler",
+    apostilaStudySession: null,
+    apostilaExamSession: null,
+    apostilaSupportItemId: null,
+    apostilaSupportContext: "",
+    apostilaStudySupportVisible: false,
+    apostilaExamSupportVisible: false,
     perfilSecaoAberta: null,
   };
   clearRouteFeedback("perfil");
@@ -636,6 +1477,547 @@ function applyProgressoLocalPatch(techId, patch) {
 
 function removeHistoricoLocalById(id) {
   state.data.historicoGraduacoes = (state.data.historicoGraduacoes || []).filter((item) => item.id !== id);
+}
+
+function getOrderedApostilaItems() {
+  return [...(state.data.apostilaSections || [])]
+    .sort((a, b) => (a.ordemSecao || 0) - (b.ordemSecao || 0))
+    .flatMap((section) => [...(section.itens || [])].sort((a, b) => (a.ordemItem || 0) - (b.ordemItem || 0)));
+}
+
+function buildStudyQueueBySection(sectionId) {
+  if (!sectionId) {
+    return [];
+  }
+
+  const section = (state.data.apostilaSections || []).find((item) => item.id === sectionId);
+  if (!section) {
+    return [];
+  }
+
+  return [...(section.itens || [])]
+    .sort((a, b) => (a.ordemItem || 0) - (b.ordemItem || 0))
+    .map((item) => item.id)
+    .filter(Boolean);
+}
+
+function buildStudyQueueJapaneseOnly() {
+  return getOrderedApostilaItems()
+    .filter((item) => item.hasJapanese)
+    .map((item) => item.id)
+    .filter(Boolean);
+}
+
+function buildStudyQueuePending() {
+  const now = Date.now();
+  const orderedItems = getOrderedApostilaItems();
+  const studyEntries = state.data.apostilaStudy || {};
+  const hasHistory = Object.keys(studyEntries).length > 0;
+
+  if (!hasHistory) {
+    return buildStudyQueueJapaneseOnly().slice(0, 20);
+  }
+
+  const queue = orderedItems
+    .map((item) => {
+      const progress = normalizeStudyProgressEntry(studyEntries[item.id]);
+      const overdueMs = progress.dueAt > 0 && progress.dueAt <= now ? now - progress.dueAt : 0;
+      const overdueDays = overdueMs > 0 ? overdueMs / DAY_MS : 0;
+      const dueScore = progress.dueAt <= 0 ? 1.8 : (overdueMs > 0 ? Math.min(6, 2 + overdueDays) : 0);
+      const lowFamiliarityScore = Math.max(0, 5 - progress.familiarity) * 1.35;
+      const mistakeBiasScore = Math.max(0, progress.totalWrong - progress.totalCorrect) * 1.8;
+      const recentErrorScore = progress.lastResult === "wrong"
+        ? (now - progress.lastSeenAt <= 3 * DAY_MS ? 3 : 1.4)
+        : 0;
+      const lowStreakScore = Math.max(0, 3 - progress.streak) * 0.9;
+      const weightedScore = dueScore + lowFamiliarityScore + mistakeBiasScore + recentErrorScore + lowStreakScore;
+
+      return {
+        id: item.id,
+        weightedScore,
+        isDue: progress.dueAt <= now,
+        ordemSecao: Number(item.ordemSecao || 0),
+        ordemItem: Number(item.ordemItem || 0),
+      };
+    })
+    .sort((a, b) => {
+      if (a.weightedScore !== b.weightedScore) {
+        return b.weightedScore - a.weightedScore;
+      }
+      if (a.isDue !== b.isDue) {
+        return Number(b.isDue) - Number(a.isDue);
+      }
+      if (a.ordemSecao !== b.ordemSecao) {
+        return a.ordemSecao - b.ordemSecao;
+      }
+      return a.ordemItem - b.ordemItem;
+    })
+    .map((item) => item.id)
+    .filter(Boolean);
+
+  const prioritized = queue.slice(0, 30);
+  return prioritized.length ? prioritized : buildStudyQueueJapaneseOnly().slice(0, 20);
+}
+
+function createStudySessionState({ selectedMode, selectedSectionId, queue }) {
+  const normalizedQueue = Array.isArray(queue) ? queue.filter(Boolean) : [];
+
+  return {
+    selectedMode,
+    selectedSectionId: selectedSectionId || null,
+    queue: normalizedQueue,
+    currentIndex: 0,
+    currentItem: normalizedQueue[0] || null,
+    answerRevealed: false,
+    finished: normalizedQueue.length === 0,
+    sessionStats: {
+      correct: 0,
+      wrong: 0,
+      skipped: 0,
+      completed: 0,
+      wrongItemIds: [],
+    },
+  };
+}
+
+function startApostilaStudySession({ mode, sectionId = null, sourceAction = "" }) {
+  let queue = [];
+
+  if (mode === "section") {
+    queue = buildStudyQueueBySection(sectionId);
+  } else if (mode === "jp_to_mov" || mode === "mov_to_jp") {
+    queue = buildStudyQueueJapaneseOnly();
+  } else if (mode === "pending") {
+    queue = buildStudyQueuePending();
+  }
+
+  if (!queue.length && mode !== "section") {
+    queue = buildStudyQueueJapaneseOnly();
+  }
+
+  state.ui.apostilaStudySession = createStudySessionState({
+    selectedMode: mode,
+    selectedSectionId: mode === "section" ? sectionId : null,
+    queue,
+  });
+
+  registerApostilaFlowActivity({
+    mode: mode === "section" ? "section" : mode,
+    sectionId: mode === "section" ? String(sectionId || "") : "",
+    recommendedAction: sourceAction,
+  });
+  state.ui.apostilaSupportItemId = null;
+  state.ui.apostilaSupportContext = "";
+  state.ui.apostilaStudySupportVisible = false;
+  state.ui.apostilaExamSupportVisible = false;
+
+  rerender();
+}
+
+function revealApostilaStudyAnswer() {
+  const session = state.ui.apostilaStudySession;
+  if (!session || session.finished) {
+    return;
+  }
+
+  session.answerRevealed = true;
+  rerender();
+}
+
+async function updateApostilaStudyProgress(itemId, result) {
+  if (!state.user || !itemId) {
+    return;
+  }
+
+  const current = normalizeStudyProgressEntry(state.data.apostilaStudy?.[itemId]);
+  const now = Date.now();
+  const patch = {
+    lastSeenAt: now,
+    lastResult: result,
+  };
+
+  if (result === "correct") {
+    const familiarity = Math.min(5, Number(current.familiarity || 0) + 1);
+    const streak = Number(current.streak || 0) + 1;
+    const baseHoursByFamiliarity = [8, 16, 30, 52, 86, 132];
+    const baseHours = baseHoursByFamiliarity[familiarity] || 30;
+    const streakMultiplier = Math.min(1.8, 1 + streak * 0.12);
+    const nextHours = Math.round(baseHours * streakMultiplier);
+
+    patch.familiarity = familiarity;
+    patch.streak = streak;
+    patch.totalCorrect = Number(current.totalCorrect || 0) + 1;
+    patch.dueAt = now + nextHours * 60 * 60 * 1000;
+  } else if (result === "wrong") {
+    patch.familiarity = Math.max(0, Number(current.familiarity || 0) - 1);
+    patch.streak = 0;
+    patch.totalWrong = Number(current.totalWrong || 0) + 1;
+    patch.lastWrongAt = now;
+    patch.dueAt = now + 75 * 60 * 1000;
+  } else if (result === "skipped") {
+    patch.streak = Math.max(0, Number(current.streak || 0) - 1);
+    patch.totalSkipped = Number(current.totalSkipped || 0) + 1;
+    patch.dueAt = now + 3 * 60 * 60 * 1000;
+  }
+
+  state.data.apostilaStudy = {
+    ...(state.data.apostilaStudy || {}),
+    [itemId]: {
+      ...current,
+      ...patch,
+    },
+  };
+  computeStudyInsights();
+
+  try {
+    const itemRef = ref(db, `users/${state.user.uid}/apostilaStudy/${itemId}`);
+    await update(itemRef, patch);
+  } catch {
+    setRouteFeedback("apostila", "Falha ao atualizar progresso de estudo.", "error");
+  }
+}
+
+async function answerApostilaStudySession(result) {
+  const session = state.ui.apostilaStudySession;
+  if (!session || session.finished || !session.currentItem) {
+    return;
+  }
+
+  const currentItemId = session.currentItem;
+
+  if (result === "correct" || result === "wrong" || result === "skipped") {
+    await updateApostilaStudyProgress(currentItemId, result);
+  }
+
+  if (result === "correct") {
+    session.sessionStats.correct += 1;
+  } else if (result === "wrong") {
+    session.sessionStats.wrong += 1;
+    if (!session.sessionStats.wrongItemIds.includes(currentItemId)) {
+      session.sessionStats.wrongItemIds.push(currentItemId);
+    }
+  } else {
+    session.sessionStats.skipped += 1;
+  }
+
+  session.sessionStats.completed += 1;
+
+  const nextIndex = session.currentIndex + 1;
+  if (nextIndex >= session.queue.length) {
+    session.currentIndex = nextIndex;
+    session.currentItem = null;
+    session.answerRevealed = false;
+    session.finished = true;
+    const streakInfo = await applyStudyStreakUpdate();
+    await patchApostilaGamification({
+      sectionsReady: { ...(state.data.gamificationOverview?.readinessBySection || {}) },
+    });
+    const perfectSectionReview = session.selectedMode === "section" && session.sessionStats.wrong === 0 && session.sessionStats.completed > 0;
+    const badgesEarnedNow = await evaluateDerivedBadges({ perfectSectionReview });
+    session.rewardFeedback = buildStudyRewardFeedback(session, streakInfo, badgesEarnedNow);
+    rerender();
+    return;
+  }
+
+  session.currentIndex = nextIndex;
+  session.currentItem = session.queue[nextIndex] || null;
+  session.answerRevealed = false;
+  state.ui.apostilaStudySupportVisible = false;
+  state.ui.apostilaSupportItemId = null;
+  state.ui.apostilaSupportContext = "";
+  rerender();
+}
+
+async function endApostilaStudySession() {
+  const session = state.ui.apostilaStudySession;
+  if (!session) {
+    return;
+  }
+
+  if (session.finished) {
+    state.ui.apostilaStudySession = null;
+    rerender();
+    return;
+  }
+
+  session.finished = true;
+  session.currentItem = null;
+  session.answerRevealed = false;
+  if (!session.rewardFeedback && Number(session.sessionStats?.completed || 0) > 0) {
+    const streakInfo = await applyStudyStreakUpdate();
+    await patchApostilaGamification({
+      sectionsReady: { ...(state.data.gamificationOverview?.readinessBySection || {}) },
+    });
+    const perfectSectionReview = session.selectedMode === "section" && session.sessionStats.wrong === 0 && session.sessionStats.completed > 0;
+    const badgesEarnedNow = await evaluateDerivedBadges({ perfectSectionReview });
+    session.rewardFeedback = buildStudyRewardFeedback(session, streakInfo, badgesEarnedNow);
+  }
+  rerender();
+}
+
+function restartApostilaStudySession() {
+  const session = state.ui.apostilaStudySession;
+  if (!session) {
+    return;
+  }
+
+  startApostilaStudySession({
+    mode: session.selectedMode,
+    sectionId: session.selectedSectionId,
+  });
+}
+
+function restartWrongItemsStudySession() {
+  const session = state.ui.apostilaStudySession;
+  if (!session) {
+    return;
+  }
+
+  const wrongQueue = Array.from(new Set(session.sessionStats?.wrongItemIds || []));
+  if (!wrongQueue.length) {
+    startApostilaStudySession({
+      mode: session.selectedMode,
+      sectionId: session.selectedSectionId,
+    });
+    return;
+  }
+
+  state.ui.apostilaStudySession = createStudySessionState({
+    selectedMode: "wrong_retry",
+    selectedSectionId: session.selectedSectionId || null,
+    queue: wrongQueue,
+  });
+
+  rerender();
+}
+
+function startStudySessionFromItems(itemIds, selectedMode = "exam_review") {
+  const queue = Array.from(new Set((itemIds || []).map((itemId) => String(itemId || "")).filter(Boolean)));
+  if (!queue.length) {
+    return;
+  }
+
+  state.ui.apostilaModo = "estudar";
+  state.ui.apostilaExamSession = null;
+  state.ui.apostilaStudySession = createStudySessionState({
+    selectedMode,
+    selectedSectionId: null,
+    queue,
+  });
+  registerApostilaFlowActivity({
+    mode: selectedMode,
+    sectionId: "",
+    recommendedAction: "review_mistakes",
+  });
+  state.ui.apostilaStudySupportVisible = false;
+  state.ui.apostilaExamSupportVisible = false;
+  state.ui.apostilaSupportItemId = null;
+  state.ui.apostilaSupportContext = "";
+  rerender();
+}
+
+function buildExamQueueBySection(sectionId) {
+  return buildStudyQueueBySection(sectionId);
+}
+
+function buildExamQueueFull() {
+  return getOrderedApostilaItems().map((item) => item.id).filter(Boolean);
+}
+
+function createExamSessionState({ examMode, selectedSectionId, queue, promptStyle }) {
+  const normalizedQueue = Array.isArray(queue) ? queue.filter(Boolean) : [];
+
+  return {
+    examMode,
+    selectedSectionId: selectedSectionId || null,
+    promptStyle: promptStyle || "mov_to_jp",
+    queue: normalizedQueue,
+    currentIndex: 0,
+    currentItem: normalizedQueue[0] || null,
+    answerRevealed: false,
+    finished: normalizedQueue.length === 0,
+    startedAt: Date.now(),
+    persisted: false,
+    examStats: {
+      correct: 0,
+      wrong: 0,
+      skipped: 0,
+      completed: 0,
+      mistakes: [],
+    },
+  };
+}
+
+function startApostilaExamSession({ mode, sectionId = null, promptStyle = "mov_to_jp", sourceAction = "" }) {
+  let queue = [];
+
+  if (mode === "section") {
+    queue = buildExamQueueBySection(sectionId);
+  } else if (mode === "full") {
+    queue = buildExamQueueFull();
+  }
+
+  state.ui.apostilaExamSession = createExamSessionState({
+    examMode: mode,
+    selectedSectionId: mode === "section" ? sectionId : null,
+    queue,
+    promptStyle,
+  });
+
+  registerApostilaFlowActivity({
+    mode: mode === "section" ? "exam_section" : "exam_full",
+    sectionId: mode === "section" ? String(sectionId || "") : "",
+    recommendedAction: sourceAction,
+  });
+  state.ui.apostilaSupportItemId = null;
+  state.ui.apostilaSupportContext = "";
+  state.ui.apostilaStudySupportVisible = false;
+  state.ui.apostilaExamSupportVisible = false;
+
+  rerender();
+}
+
+function revealApostilaExamAnswer() {
+  const session = state.ui.apostilaExamSession;
+  if (!session || session.finished) {
+    return;
+  }
+
+  session.answerRevealed = true;
+  rerender();
+}
+
+async function persistApostilaExamSession(session) {
+  if (!state.user || !session || session.persisted) {
+    return false;
+  }
+
+  const finishedAt = Date.now();
+  const totalItems = Number(session.queue?.length || 0);
+  const correct = Number(session.examStats?.correct || 0);
+  const wrong = Number(session.examStats?.wrong || 0);
+  const skipped = Number(session.examStats?.skipped || 0);
+  const mistakes = Array.from(new Set(session.examStats?.mistakes || []));
+  const score = totalItems > 0 ? Math.round((correct / totalItems) * 100) : 0;
+
+  const payload = {
+    mode: session.examMode,
+    selectedSectionId: session.selectedSectionId || null,
+    promptStyle: session.promptStyle || "mov_to_jp",
+    startedAt: Number(session.startedAt || finishedAt),
+    finishedAt,
+    score,
+    totalItems,
+    mistakes,
+    correct,
+    wrong,
+    skipped,
+  };
+
+  try {
+    const examRootRef = ref(db, `users/${state.user.uid}/apostilaExam`);
+    const sessionRef = push(examRootRef);
+    await set(sessionRef, payload);
+    session.persisted = true;
+    return true;
+  } catch {
+    setRouteFeedback("apostila", "Falha ao registrar resultado do simulado.", "error");
+    return false;
+  }
+}
+
+async function endApostilaExamSession() {
+  const session = state.ui.apostilaExamSession;
+  if (!session) {
+    return;
+  }
+
+  if (session.finished) {
+    state.ui.apostilaExamSession = null;
+    rerender();
+    return;
+  }
+
+  session.finished = true;
+  session.currentItem = null;
+  session.answerRevealed = false;
+  const persistedNow = await persistApostilaExamSession(session);
+  const badgesEarnedNow = persistedNow ? await evaluateDerivedBadges({ examCompleted: true }) : [];
+  session.rewardFeedback = buildExamRewardFeedback(session, badgesEarnedNow);
+  rerender();
+}
+
+async function answerApostilaExamSession(result) {
+  const session = state.ui.apostilaExamSession;
+  if (!session || session.finished || !session.currentItem) {
+    return;
+  }
+
+  const currentItemId = session.currentItem;
+  if (result === "correct") {
+    session.examStats.correct += 1;
+  } else if (result === "wrong") {
+    session.examStats.wrong += 1;
+    if (!session.examStats.mistakes.includes(currentItemId)) {
+      session.examStats.mistakes.push(currentItemId);
+    }
+  } else if (result === "skipped") {
+    session.examStats.skipped += 1;
+  }
+
+  session.examStats.completed += 1;
+
+  const nextIndex = session.currentIndex + 1;
+  if (nextIndex >= session.queue.length) {
+    session.currentIndex = nextIndex;
+    session.currentItem = null;
+    session.answerRevealed = false;
+    session.finished = true;
+    const persistedNow = await persistApostilaExamSession(session);
+    const badgesEarnedNow = persistedNow ? await evaluateDerivedBadges({ examCompleted: true }) : [];
+    session.rewardFeedback = buildExamRewardFeedback(session, badgesEarnedNow);
+    rerender();
+    return;
+  }
+
+  session.currentIndex = nextIndex;
+  session.currentItem = session.queue[nextIndex] || null;
+  session.answerRevealed = false;
+  state.ui.apostilaExamSupportVisible = false;
+  state.ui.apostilaSupportItemId = null;
+  state.ui.apostilaSupportContext = "";
+  rerender();
+}
+
+function restartApostilaExamSession() {
+  const session = state.ui.apostilaExamSession;
+  if (!session) {
+    return;
+  }
+
+  startApostilaExamSession({
+    mode: session.examMode,
+    sectionId: session.selectedSectionId,
+    promptStyle: session.promptStyle,
+  });
+}
+
+function reviewCurrentExamMistakes() {
+  const session = state.ui.apostilaExamSession;
+  if (!session) {
+    return;
+  }
+
+  startStudySessionFromItems(session.examStats?.mistakes || [], "exam_review");
+}
+
+function reviewSavedExamMistakes(sessionId) {
+  const target = (state.data.apostilaExamSessions || []).find((entry) => entry.id === sessionId);
+  if (!target) {
+    return;
+  }
+
+  startStudySessionFromItems(target.mistakes || [], "exam_review");
 }
 
 function getTecnicaResumo(tecnicaIds) {
@@ -1116,13 +2498,116 @@ function renderRoute(route, user) {
   }
 
   if (route === "/apostila") {
-    mountApostilaHandlers();
+    mountApostilaHandlers({
+      modoAtual: state.ui.apostilaModo,
+      onModeChange: (modo) => {
+        state.ui.apostilaModo = modo;
+        state.ui.apostilaStudySession = null;
+        state.ui.apostilaExamSession = null;
+        state.ui.apostilaSupportItemId = null;
+        state.ui.apostilaSupportContext = "";
+        state.ui.apostilaStudySupportVisible = false;
+        state.ui.apostilaExamSupportVisible = false;
+        rerender();
+      },
+      onStartStudySession: ({ mode, sectionId }) => {
+        startApostilaStudySession({ mode, sectionId });
+      },
+      onRevealStudyAnswer: () => {
+        revealApostilaStudyAnswer();
+      },
+      onAnswerStudySession: async (result) => {
+        await answerApostilaStudySession(result);
+      },
+      onEndStudySession: async () => {
+        await endApostilaStudySession();
+      },
+      onRestartStudySession: () => {
+        restartApostilaStudySession();
+      },
+      onRestartWrongStudySession: () => {
+        restartWrongItemsStudySession();
+      },
+      onStartExamSession: ({ mode, sectionId, promptStyle }) => {
+        startApostilaExamSession({ mode, sectionId, promptStyle });
+      },
+      onRevealExamAnswer: () => {
+        revealApostilaExamAnswer();
+      },
+      onAnswerExamSession: async (result) => {
+        await answerApostilaExamSession(result);
+      },
+      onEndExamSession: async () => {
+        await endApostilaExamSession();
+      },
+      onRestartExamSession: () => {
+        restartApostilaExamSession();
+      },
+      onReviewCurrentExamMistakes: () => {
+        reviewCurrentExamMistakes();
+      },
+      onReviewSavedExamMistakes: (sessionId) => {
+        reviewSavedExamMistakes(sessionId);
+      },
+      onRunGuidedAction: ({ actionType, sectionId }) => {
+        runGuidedRecommendationAction(actionType, sectionId);
+      },
+      onResumeFlow: () => {
+        resumeLastApostilaFlow();
+      },
+      onOpenItemSupport: async ({ itemId, context }) => {
+        const normalizedItemId = itemId || null;
+        const normalizedContext = context || "";
+        const isSameTarget = state.ui.apostilaSupportItemId === normalizedItemId && state.ui.apostilaSupportContext === normalizedContext;
+
+        if (isSameTarget) {
+          state.ui.apostilaSupportItemId = null;
+          state.ui.apostilaSupportContext = "";
+          state.ui.apostilaStudySupportVisible = false;
+          state.ui.apostilaExamSupportVisible = false;
+          rerender();
+          return;
+        }
+
+        state.ui.apostilaSupportItemId = normalizedItemId;
+        state.ui.apostilaSupportContext = normalizedContext;
+        if (context === "study") {
+          state.ui.apostilaStudySupportVisible = true;
+        }
+        if (context === "exam") {
+          state.ui.apostilaExamSupportVisible = true;
+        }
+        if (context === "reading") {
+          state.ui.apostilaStudySupportVisible = false;
+          state.ui.apostilaExamSupportVisible = false;
+        }
+        await registerApostilaMediaUsage(itemId, "opened");
+        rerender();
+      },
+      onCloseItemSupport: ({ context }) => {
+        state.ui.apostilaSupportItemId = null;
+        state.ui.apostilaSupportContext = "";
+        if (context === "study") {
+          state.ui.apostilaStudySupportVisible = false;
+        } else if (context === "exam") {
+          state.ui.apostilaExamSupportVisible = false;
+        } else {
+          state.ui.apostilaStudySupportVisible = false;
+          state.ui.apostilaExamSupportVisible = false;
+        }
+        rerender();
+      },
+      onTrackItemSupportUsage: async ({ itemId, markerType }) => {
+        await registerApostilaMediaUsage(itemId, markerType);
+      },
+    });
   }
 }
 
 function start() {
   setupTopUserMenu();
   mergeApostilaComProgresso();
+  computeStudyInsights();
   computeMetrics();
   renderSessionBooting();
 

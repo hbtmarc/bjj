@@ -1,3 +1,11 @@
+import {
+  getItemAudioUrl,
+  getItemImageUrl,
+  getItemVideoUrl,
+  getPrimaryMediaType,
+  hasAnyMedia,
+} from "./apostila-data.js";
+
 /* ── Inline SVG icon system ─────────────────────────────────── */
 const ICONS = {
   edit: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3z"/><path d="M9.5 3.5l3 3"/></svg>',
@@ -9,6 +17,8 @@ const ICONS = {
   login: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14h2.67A1.33 1.33 0 0014 12.67V3.33A1.33 1.33 0 0012.67 2H10"/><path d="M5.33 11.33L2 8l3.33-3.33"/><path d="M2 8h8"/></svg>',
   camera: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.33 5.33A1.33 1.33 0 012.67 4h1.66L5.67 2.67h4.66L11.67 4h1.66a1.33 1.33 0 011.34 1.33v6.67a1.33 1.33 0 01-1.34 1.33H2.67a1.33 1.33 0 01-1.34-1.33V5.33z"/><circle cx="8" cy="8" r="2.33"/></svg>',
   removeImg: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.33" y="2.67" width="13.33" height="10.67" rx="1.33"/><path d="M5.67 6.33l4.66 4.67M10.33 6.33L5.67 11"/></svg>',
+  support: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.67 3.33A1.33 1.33 0 014 2h8a1.33 1.33 0 011.33 1.33v9.34A1.33 1.33 0 0112 14H4a1.33 1.33 0 01-1.33-1.33V3.33z"/><path d="M5.33 5.33h5.34M5.33 8h5.34M5.33 10.67H8"/></svg>',
+  closePanel: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4L4 12M4 4l8 8"/></svg>',
 };
 
 function iconBtn(icon, label, { cls = "icon-btn", extra = "" } = {}) {
@@ -156,6 +166,32 @@ function renderDashboard(user, dataState) {
   const gradInfo = computeGradProgress(dataState.historicoGraduacoes, perfil.proximaMetaGraduacao);
   const beltColor = BELT_COLORS[faixaAtualEff] || BELT_COLORS._default;
   const hasContext = Boolean(faixaAtualEff || professor || meta || catLabel || treinosAlvo || gradInfo);
+  const apostilaPct = metrics.totalItensApostila
+    ? Math.round((metrics.itensConcluidos / metrics.totalItensApostila) * 100)
+    : 0;
+  const consistenciaLabel = treinosAlvo
+    ? metrics.treinos7d >= treinosAlvo
+      ? "Meta semanal atingida"
+      : `Faltam ${Math.max(0, treinosAlvo - metrics.treinos7d)} treino(s) para a meta`
+    : "Defina uma meta semanal no Perfil";
+
+  const tecnicasOrdenadasPorFoco = [...(dataState.apostilaItemsComProgresso || [])]
+    .sort((a, b) => {
+      const leftScore = Number(a.nivelConfianca || 0);
+      const rightScore = Number(b.nivelConfianca || 0);
+      if (leftScore !== rightScore) {
+        return leftScore - rightScore;
+      }
+      if (Boolean(a.concluida) !== Boolean(b.concluida)) {
+        return Number(a.concluida) - Number(b.concluida);
+      }
+      if ((a.ordemSecao || 0) !== (b.ordemSecao || 0)) {
+        return (a.ordemSecao || 0) - (b.ordemSecao || 0);
+      }
+      return (a.ordemItem || 0) - (b.ordemItem || 0);
+    })
+    .filter((item) => !item.concluida || Number(item.nivelConfianca || 0) <= 2)
+    .slice(0, 4);
 
   const ctxChips = [
     faixaAtualEff ? `<span class="chip">Faixa ${faixaAtualEff}</span>` : "",
@@ -164,74 +200,76 @@ function renderDashboard(user, dataState) {
 
   return card(`
     <h2 class="page-title">Dashboard</h2>
-    <p class="page-subtitle">Olá, <strong>${displayName}</strong>!${ctxChips ? ` <span class="chip-line dash-greeting-chips">${ctxChips}</span>` : " Aqui está seu progresso real."}</p>
-
-    <section class="stats-grid">
-      <article class="stat-item">
-        <h3>Treinos nos últimos 7 dias</h3>
-        <strong>${metrics.treinos7d}${treinosAlvo ? ` / ${treinosAlvo}` : ""}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Treinos nos últimos 30 dias</h3>
-        <strong>${metrics.treinos30d}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Média da nota (últimas 5)</h3>
-        <strong>${metrics.mediaUltimas5}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Técnicas mais praticadas</h3>
-        <strong>${metrics.tecnicasMaisPraticadas.length}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Total de itens da apostila</h3>
-        <strong>${metrics.totalItensApostila}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Itens favoritados</h3>
-        <strong>${metrics.itensFavoritados}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Itens concluídos</h3>
-        <strong>${metrics.itensConcluidos}</strong>
-      </article>
-      <article class="stat-item">
-        <h3>Confiança média</h3>
-        <strong>${metrics.confiancaMedia}</strong>
-      </article>
+    <section class="dash-hero">
+      <p class="page-subtitle">Olá, <strong>${displayName}</strong>!${ctxChips ? ` <span class="chip-line dash-greeting-chips">${ctxChips}</span>` : " Aqui está seu painel de evolução."}</p>
+      <div class="dash-kpi-grid">
+        <article class="dash-kpi-card">
+          <h3>Treinos na semana</h3>
+          <strong>${metrics.treinos7d}${treinosAlvo ? ` / ${treinosAlvo}` : ""}</strong>
+          <p>${consistenciaLabel}</p>
+        </article>
+        <article class="dash-kpi-card">
+          <h3>Treinos em 30 dias</h3>
+          <strong>${metrics.treinos30d}</strong>
+          <p>Volume recente de treinos</p>
+        </article>
+        <article class="dash-kpi-card">
+          <h3>Média das últimas 5 notas</h3>
+          <strong>${metrics.mediaUltimas5}</strong>
+          <p>Percepção de desempenho</p>
+        </article>
+        <article class="dash-kpi-card">
+          <h3>Situação da apostila</h3>
+          <strong>${apostilaPct}%</strong>
+          <p>${metrics.itensConcluidos} de ${metrics.totalItensApostila} itens concluídos</p>
+        </article>
+      </div>
     </section>
 
     ${hasContext ? `
-    <section class="dash-athlete-context">
-      <h3 class="section-title">Contexto do atleta</h3>
-      <div class="stats-grid">
-        <article class="stat-item">
-          <h3>Faixa atual</h3>
-          <strong>${faixaCompleta}</strong>
-          ${latestGrad ? '<span class="muted-text" style="font-size:0.78rem;font-weight:400">Derivado do histórico</span>' : ''}
-        </article>
-        ${profLabel ? `<article class="stat-item"><h3>Professor</h3><strong>${profLabel}</strong></article>` : ""}
-        ${meta ? `<article class="stat-item"><h3>Objetivo</h3><strong>${meta}</strong></article>` : ""}
-        ${catLabel ? `<article class="stat-item"><h3>Categoria de peso</h3><strong>${catLabel}</strong></article>` : ""}
-        ${treinosAlvo ? `<article class="stat-item"><h3>Meta semanal</h3><strong>${treinosAlvo} treinos/sem.</strong></article>` : ""}
-      </div>
-      ${gradInfo ? `
-      <div class="dash-grad-progress">
-        <p class="dash-grad-label">${gradInfo.isOverdue
-          ? "Meta de graduação ultrapassada."
-          : `Progressão até a próxima faixa: ${gradInfo.pct}%${gradInfo.monthsLeft > 0 ? ` — faltam ${gradInfo.monthsLeft} ${gradInfo.monthsLeft === 1 ? "mês" : "meses"}` : " — objetivo próximo!"}`
-        }</p>
-        <div class="grad-progress-wrap" role="progressbar" aria-valuenow="${gradInfo.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progressão para próxima graduação">
-          <div class="grad-progress-bar" style="width:${gradInfo.pct}%;background:${beltColor.bar}"></div>
+      <section class="dash-block">
+        <h3 class="section-title">Resumo geral do atleta</h3>
+        <div class="stats-grid">
+          <article class="stat-item">
+            <h3>Faixa e grau</h3>
+            <strong>${faixaCompleta}</strong>
+            ${latestGrad ? '<span class="muted-text" style="font-size:0.78rem;font-weight:400">Baseado no histórico</span>' : ""}
+          </article>
+          ${meta ? `<article class="stat-item"><h3>Objetivo principal</h3><strong>${meta}</strong></article>` : ""}
+          ${catLabel ? `<article class="stat-item"><h3>Categoria de peso</h3><strong>${catLabel}</strong></article>` : ""}
+          ${treinosAlvo ? `<article class="stat-item"><h3>Meta semanal</h3><strong>${treinosAlvo} treinos/sem.</strong></article>` : ""}
         </div>
-      </div>
-      ` : ""}
-    </section>
+      </section>
+
+      <section class="dash-block dash-athlete-context">
+        <h3 class="section-title">Contexto esportivo</h3>
+        <div class="stats-grid">
+          ${profLabel ? `<article class="stat-item"><h3>Professor</h3><strong>${profLabel}</strong></article>` : ""}
+          <article class="stat-item"><h3>Técnicas mais praticadas</h3><strong>${metrics.tecnicasMaisPraticadas.length}</strong></article>
+          <article class="stat-item"><h3>Itens favoritados</h3><strong>${metrics.itensFavoritados}</strong></article>
+          <article class="stat-item"><h3>Confiança média</h3><strong>${metrics.confiancaMedia}</strong></article>
+        </div>
+      </section>
     ` : ""}
 
-    <div class="split-grid">
-      <section>
-        <h3 class="section-title">Últimos 3 treinos</h3>
+    <section class="dash-block">
+      <h3 class="section-title">Evolução atual</h3>
+      ${gradInfo ? `
+        <div class="dash-grad-progress">
+          <p class="dash-grad-label">${gradInfo.isOverdue
+            ? "Meta de graduação ultrapassada."
+            : `Progressão até a próxima faixa: ${gradInfo.pct}%${gradInfo.monthsLeft > 0 ? ` — faltam ${gradInfo.monthsLeft} ${gradInfo.monthsLeft === 1 ? "mês" : "meses"}` : " — objetivo próximo!"}`
+          }</p>
+          <div class="grad-progress-wrap" role="progressbar" aria-valuenow="${gradInfo.pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Progressão para próxima graduação">
+            <div class="grad-progress-bar" style="width:${gradInfo.pct}%;background:${beltColor.bar}"></div>
+          </div>
+        </div>
+      ` : "<p class=\"empty-state\">Adicione sua meta de graduação no Perfil para acompanhar sua evolução.</p>"}
+    </section>
+
+    <div class="split-grid dash-reading-grid">
+      <section class="dash-block">
+        <h3 class="section-title">Últimos treinos</h3>
         ${metrics.ultimosTreinos.length === 0
           ? "<p class=\"empty-state\">Você ainda não registrou treinos.</p>"
           : `<ul class="simple-list">${metrics.ultimosTreinos
@@ -241,7 +279,7 @@ function renderDashboard(user, dataState) {
               .join("")}</ul>`}
       </section>
 
-      <section>
+      <section class="dash-block">
         <h3 class="section-title">Técnicas mais praticadas</h3>
         ${metrics.tecnicasMaisPraticadas.length === 0
           ? "<p class=\"empty-state\">Sem práticas vinculadas até o momento.</p>"
@@ -250,6 +288,15 @@ function renderDashboard(user, dataState) {
               .join("")}</ul>`}
       </section>
     </div>
+
+    <section class="dash-block">
+      <h3 class="section-title">Próximos focos</h3>
+      ${tecnicasOrdenadasPorFoco.length === 0
+        ? "<p class=\"empty-state\">Continue registrando progresso nas técnicas para gerar focos de estudo automáticos.</p>"
+        : `<ul class="simple-list">${tecnicasOrdenadasPorFoco
+            .map((item) => `<li><strong>${item.ordemSecao}.${item.ordemItem} — ${item.nome}</strong> • confiança ${item.nivelConfianca || 0}/5</li>`)
+            .join("")}</ul>`}
+    </section>
   `);
 }
 
@@ -1116,14 +1163,107 @@ function renderTecnicas(dataState, feedback, uiState) {
   `);
 }
 
-function renderApostila(dataState, feedback) {
-  const sections = [...(dataState.apostilaSections || [])].sort((left, right) => (left.ordemSecao || 0) - (right.ordemSecao || 0));
+function renderItemStudySupportPanel(item, { context = "reading", lockedCore = false } = {}) {
+  if (!item) {
+    return "";
+  }
 
-  return card(`
-    <h2 class="page-title">Apostila</h2>
-    <p class="page-subtitle">Leitura oficial para estudo e memorização, em ordem da apostila.</p>
-    ${formMessage(feedback)}
+  const imageUrl = getItemImageUrl(item);
+  const videoUrl = getItemVideoUrl(item);
+  const audioUrl = getItemAudioUrl(item);
+  const hasMedia = hasAnyMedia(item);
+  const primaryMediaType = getPrimaryMediaType(item);
 
+  const movementLabel = item.portugueseLabel || item.displayName || item.nome;
+  const japaneseLabel = item.japaneseTerm || "";
+  const hasHints = Boolean(item.visualCueLabel || item.pronunciationHint || item.mnemonicHint);
+
+  return `
+    <article class="apostila-support-panel" data-apostila-support-panel="${item.id}" aria-label="Apoio de estudo do item">
+      <header class="apostila-support-header">
+        <div>
+          <p class="apostila-shell-meta">${item.ordemSecao}.${item.ordemItem}</p>
+          <h4>${item.displayName || item.nome}</h4>
+          ${japaneseLabel ? `<p class="apostila-support-jp">${japaneseLabel}</p>` : ""}
+          <p class="apostila-shell-meta">Seção: ${item.secaoTitulo || "Apostila"}</p>
+        </div>
+        <button class="icon-btn" type="button" aria-label="Fechar apoio de estudo" title="Fechar apoio de estudo" data-apostila-support-close data-apostila-support-context="${context}">${ICONS.closePanel}<span class="icon-btn-label">Fechar</span></button>
+      </header>
+
+      <section class="apostila-support-core">
+        <h5>Zona de memória</h5>
+        ${lockedCore
+          ? `<p class="apostila-shell-meta">Revele a resposta para ver associação completa deste item.</p>`
+          : `
+            ${japaneseLabel ? `<p><strong>Nome em japonês:</strong> ${japaneseLabel}</p>` : ""}
+            <p><strong>Movimento correspondente:</strong> ${movementLabel}</p>
+          `
+        }
+        ${item.visualCueLabel ? `<p><strong>Pista visual:</strong> ${item.visualCueLabel}</p>` : ""}
+        ${item.pronunciationHint ? `<p><strong>Pista de pronúncia:</strong> ${item.pronunciationHint}</p>` : ""}
+        ${item.mnemonicHint ? `<p><strong>Dica de memorização:</strong> ${item.mnemonicHint}</p>` : ""}
+      </section>
+
+      <section class="apostila-support-focus">
+        <p>Observe primeiro · Fale o nome · Relacione com o movimento · Reveja se necessário</p>
+      </section>
+
+      <section class="apostila-support-media">
+        <h5>Mídia de apoio</h5>
+        ${hasMedia
+          ? `<p class="apostila-shell-meta">Mídia principal: ${primaryMediaType === "image" ? "Imagem" : primaryMediaType === "video" ? "Vídeo" : primaryMediaType === "audio" ? "Áudio" : "Apoio"}</p>`
+          : ""}
+
+        ${imageUrl
+          ? `
+            <details class="apostila-support-segment" data-apostila-support-track="image" data-item-id="${item.id}">
+              <summary>Ver imagem de referência</summary>
+              <div class="apostila-media-frame apostila-media-image-frame">
+                <img src="${imageUrl}" alt="Referência visual do item ${item.displayName || item.nome}" loading="lazy" data-apostila-media-image />
+              </div>
+              ${item.mediaCaption ? `<p class="apostila-shell-meta">${item.mediaCaption}</p>` : ""}
+            </details>
+          `
+          : ""}
+
+        ${videoUrl
+          ? `
+            <details class="apostila-support-segment" data-apostila-support-track="video" data-item-id="${item.id}">
+              <summary>Ver vídeo de execução</summary>
+              <div class="apostila-media-frame apostila-media-video-frame">
+                <video controls preload="metadata" playsinline data-apostila-media-video>
+                  <source src="${videoUrl}" />
+                  Seu navegador não suporta vídeo HTML5.
+                </video>
+              </div>
+            </details>
+          `
+          : ""}
+
+        ${audioUrl
+          ? `
+            <details class="apostila-support-segment" data-apostila-support-track="audio" data-item-id="${item.id}">
+              <summary>Ouvir pronúncia</summary>
+              <div class="apostila-audio-row">
+                <audio controls preload="none" data-apostila-audio-player data-item-id="${item.id}">
+                  <source src="${audioUrl}" />
+                  Seu navegador não suporta áudio HTML5.
+                </audio>
+              </div>
+            </details>
+          `
+          : ""}
+
+        ${!hasMedia ? `<p class="empty-state">Sem mídia de apoio para este item no momento.</p>` : ""}
+      </section>
+
+      ${!hasHints ? "" : `<button class="icon-btn" type="button" data-apostila-support-hint data-item-id="${item.id}" aria-label="Marcar visualização de pista" title="Marcar visualização de pista">${ICONS.support}<span class="icon-btn-label">Marcar pista como vista</span></button>`}
+    </article>
+  `;
+}
+
+function renderApostilaReadingMode(sections, uiState) {
+  return `
     <div class="apostila-reading-layout">
       <aside class="apostila-sidebar" aria-label="Navegação das seções da apostila">
         <p class="apostila-sidebar-title">Seções oficiais</p>
@@ -1164,14 +1304,19 @@ function renderApostila(dataState, feedback) {
                 <h3 class="apostila-study-title">${section.ordemSecao}. ${section.titulo}</h3>
                 <ol class="apostila-study-list">
                   ${orderedItens
-                    .map(
-                      (item) => `
-                        <li class="apostila-study-row">
-                          <span class="apostila-ordem">${item.ordemSecao}.${item.ordemItem}</span>
-                          <span class="apostila-title"><strong>${item.nome}</strong></span>
+                    .map((item) => {
+                      const isSupportOpen = uiState?.apostilaSupportContext === "reading" && uiState?.apostilaSupportItemId === item.id;
+                      return `
+                        <li class="apostila-study-row-wrap">
+                          <div class="apostila-study-row">
+                            <span class="apostila-ordem">${item.ordemSecao}.${item.ordemItem}</span>
+                            <span class="apostila-title"><strong>${item.nome}</strong></span>
+                            <button class="icon-btn apostila-support-open-btn" type="button" aria-label="Abrir apoio de estudo" title="Abrir apoio de estudo" data-apostila-support-open data-item-id="${item.id}" data-apostila-support-context="reading">${ICONS.support}<span class="icon-btn-label">Abrir apoio de estudo</span></button>
+                          </div>
+                          ${isSupportOpen ? renderItemStudySupportPanel(item, { context: "reading", lockedCore: false }) : ""}
                         </li>
-                      `
-                    )
+                      `;
+                    })
                     .join("")}
                 </ol>
               </section>
@@ -1180,6 +1325,558 @@ function renderApostila(dataState, feedback) {
           .join("")}
       </section>
     </div>
+  `;
+}
+
+function getApostilaItemById(sections, itemId) {
+  if (!itemId) {
+    return null;
+  }
+
+  for (const section of sections) {
+    const found = (section.itens || []).find((item) => item.id === itemId);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function renderApostilaEstudoMode(dataState, sections, studySession, uiState) {
+  const studyInsights = dataState.studyInsights || {};
+  const gamification = dataState.gamificationOverview || {};
+  const totalRegistros = Object.keys(dataState.apostilaStudy || {}).length;
+  const sessionStats = studySession?.sessionStats || {};
+  const totalSessao = Number(studySession?.queue?.length || 0);
+  const currentIndex = Number(studySession?.currentIndex || 0);
+  const restante = Math.max(0, totalSessao - currentIndex);
+  const currentItem = studySession?.currentItem ? getApostilaItemById(sections, studySession.currentItem) : null;
+  const sectionOptions = sections
+    .map((s) => `<option value="${s.id}">${s.ordemSecao}. ${s.titulo}</option>`)
+    .join("");
+
+  const promptValue = (() => {
+    if (!currentItem) {
+      return "";
+    }
+    if (studySession?.selectedMode === "mov_to_jp") {
+      return currentItem.portugueseLabel || currentItem.nome;
+    }
+    return currentItem.japaneseTerm || currentItem.nome;
+  })();
+
+  const answerValue = (() => {
+    if (!currentItem) {
+      return "";
+    }
+    if (studySession?.selectedMode === "mov_to_jp") {
+      return currentItem.japaneseTerm || currentItem.nome;
+    }
+    return currentItem.portugueseLabel || currentItem.displayName || currentItem.nome;
+  })();
+
+  const promptTitle = studySession?.selectedMode === "mov_to_jp"
+    ? "Movimento → Japonês"
+    : studySession?.selectedMode === "jp_to_mov"
+      ? "Japonês → Movimento"
+      : studySession?.selectedMode === "wrong_retry"
+        ? "Revisão de erros"
+      : studySession?.selectedMode === "pending"
+        ? "Itens pendentes"
+        : "Estudo por seção";
+
+  const completed = Number(sessionStats.completed || 0);
+  const correct = Number(sessionStats.correct || 0);
+  const wrong = Number(sessionStats.wrong || 0);
+  const skipped = Number(sessionStats.skipped || 0);
+  const wrongItemIds = Array.isArray(sessionStats.wrongItemIds) ? sessionStats.wrongItemIds : [];
+  const accuracy = completed > 0 ? Math.round((correct / completed) * 100) : 0;
+  const avgFamiliarity = Number(studyInsights.averageFamiliarity || 0).toFixed(1).replace(".", ",");
+  const totalItems = Number(studyInsights.totalItems || sections.reduce((acc, section) => acc + (section.itens || []).length, 0));
+  const pendingItems = Number(studyInsights.pendingItems || 0);
+  const masteredItems = Number(studyInsights.masteredItems || 0);
+  const weakItems = Number(studyInsights.weakItems || 0);
+  const streakCurrent = Number(gamification.streakCurrent || 0);
+  const overallReadinessPct = Number(gamification.overallReadinessPct || 0);
+  const sectionsReadyCount = Number(gamification.sectionsReadyCount || 0);
+  const readinessBySection = gamification.readinessBySection || {};
+  const recommendation = gamification.recommendation || null;
+  const todayPlan = gamification.todayPlan || null;
+  const resumeFlow = gamification.resumeFlow || null;
+  const badgesUnlockedList = Array.isArray(gamification.badgesUnlockedList) ? gamification.badgesUnlockedList.slice(0, 5) : [];
+  const sectionInsights = Array.isArray(studyInsights.sections) && studyInsights.sections.length
+    ? studyInsights.sections
+    : sections.map((section) => ({
+        id: section.id,
+        ordemSecao: section.ordemSecao,
+        titulo: section.titulo,
+        totalItems: (section.itens || []).length,
+        studiedItems: 0,
+        masteredItems: 0,
+        weakItems: 0,
+        averageFamiliarity: 0,
+        progressPct: 0,
+      }));
+  const suggestedSections = [...sectionInsights]
+    .sort((left, right) => {
+      if ((left.weakItems || 0) !== (right.weakItems || 0)) {
+        return (right.weakItems || 0) - (left.weakItems || 0);
+      }
+      if ((left.progressPct || 0) !== (right.progressPct || 0)) {
+        return (left.progressPct || 0) - (right.progressPct || 0);
+      }
+      return (left.ordemSecao || 0) - (right.ordemSecao || 0);
+    })
+    .slice(0, 3);
+  const resumeModeLabel = (() => {
+    if (!resumeFlow?.lastMode) {
+      return "";
+    }
+    const map = {
+      pending: "Revisar pendentes",
+      section: "Estudo por seção",
+      jp_to_mov: "Japonês → movimento",
+      mov_to_jp: "Movimento → japonês",
+      exam_section: "Simulado por seção",
+      exam_full: "Simulado completo",
+      exam_review: "Revisão de erros",
+      wrong_retry: "Revisão de erros",
+    };
+    return map[resumeFlow.lastMode] || "Estudo recente";
+  })();
+  const sessionPosition = totalSessao ? `${Math.min(currentIndex + 1, totalSessao)} de ${totalSessao}` : "0 de 0";
+  const isStudySupportOpen = Boolean(uiState?.apostilaStudySupportVisible && currentItem && uiState?.apostilaSupportItemId === currentItem.id && uiState?.apostilaSupportContext === "study");
+
+  return `
+    <section class="apostila-mode-shell" aria-label="Estudar a apostila">
+      <header class="apostila-mode-head">
+        <div>
+          <h3 class="section-title">Estudar a apostila</h3>
+          <p class="page-subtitle">Sessões curtas para memorização ativa, sem alterar a ordem oficial da apostila.</p>
+        </div>
+        <p class="apostila-shell-meta">Registros de estudo disponíveis: <strong>${totalRegistros}</strong></p>
+      </header>
+
+      <section class="apostila-plan-today" aria-label="Plano de hoje">
+        <div>
+          <h4 class="apostila-section-cards-title">Plano de hoje</h4>
+          <p class="apostila-shell-meta"><strong>Sua prioridade:</strong> ${todayPlan?.prioridade || recommendation?.title || "Revisar itens pendentes"}</p>
+          <p class="apostila-shell-meta">Itens pendentes: <strong>${pendingItems}</strong></p>
+          <p class="apostila-shell-meta">Seção mais fraca: <strong>${todayPlan?.weakestSection?.label || "Sem seção crítica no momento"}</strong>${todayPlan?.weakestSection ? ` · ${todayPlan.weakestSection.weakItems} item(ns) fraco(s)` : ""}</p>
+          <p class="apostila-shell-meta"><strong>Sugestão principal:</strong> ${todayPlan?.recommendation?.title || recommendation?.title || "Revisar itens pendentes"}</p>
+        </div>
+        <button
+          class="primary-icon-btn"
+          type="button"
+          data-apostila-guidance-action="${todayPlan?.recommendation?.type || recommendation?.type || "pending"}"
+          data-apostila-guidance-section-id="${todayPlan?.recommendation?.sectionId || recommendation?.sectionId || ""}"
+        >Iniciar agora</button>
+      </section>
+
+      ${resumeFlow
+        ? `<section class="apostila-resume-flow" aria-label="Retomar estudo">
+            <p class="apostila-shell-meta"><strong>Retomar de onde parei:</strong> ${resumeModeLabel}${resumeFlow.lastSectionId ? ` · seção ${resumeFlow.lastSectionId}` : ""}</p>
+            <button class="icon-btn" type="button" data-apostila-resume-flow="true">Retomar</button>
+          </section>`
+        : ""}
+
+      <section class="apostila-overview-panel" aria-label="Visão geral do estudo">
+        <div class="apostila-study-overview-grid">
+          <article class="stat-item"><h3>Sequência de estudo</h3><strong>${streakCurrent} dia(s)</strong></article>
+          <article class="stat-item"><h3>Prontidão geral</h3><strong>${overallReadinessPct}%</strong></article>
+          <article class="stat-item"><h3>Seções concluídas</h3><strong>${sectionsReadyCount}/${sectionInsights.length}</strong></article>
+          <article class="stat-item"><h3>Itens dominados</h3><strong>${masteredItems}</strong></article>
+        </div>
+        <div class="apostila-recommendation-block">
+          <p class="apostila-shell-meta"><strong>Sugestão de agora:</strong> ${recommendation?.title || "Revisar itens pendentes"}</p>
+          <p class="apostila-shell-meta">${recommendation?.description || "Priorize itens em atraso para manter consistência."}</p>
+        </div>
+        ${badgesUnlockedList.length
+          ? `<div class="apostila-badges-row">${badgesUnlockedList
+              .map((badge) => `<span class="apostila-badge-chip" title="Conquista desbloqueada">${badge.label}</span>`)
+              .join("")}</div>`
+          : ""}
+      </section>
+
+      <section class="apostila-sections-stream" aria-label="Progresso por seção">
+        <h4 class="apostila-section-cards-title">Progresso por seção (ordem oficial)</h4>
+        <div class="apostila-sections-stream-list">
+          ${sectionInsights.map((sectionInsight) => `
+            <details class="apostila-section-progress-card" ${sectionInsight.weakItems > 0 && sectionInsight.progressPct < 35 ? "open" : ""}>
+              <summary class="apostila-section-progress-summary">
+                <div>
+                  <h5>${sectionInsight.ordemSecao}. ${sectionInsight.titulo}</h5>
+                  <p>${sectionInsight.masteredItems}/${sectionInsight.totalItems} dominados · ${readinessBySection[sectionInsight.id] || "Não iniciada"}</p>
+                </div>
+                <span>${sectionInsight.progressPct}%</span>
+              </summary>
+              <div class="apostila-section-progress-content">
+                <div class="apostila-section-progress-meta">
+                  <span>Total: <strong>${sectionInsight.totalItems}</strong></span>
+                  <span>Dominados: <strong>${sectionInsight.masteredItems}</strong></span>
+                  <span>Fracos: <strong>${sectionInsight.weakItems}</strong></span>
+                  <span>Status: <strong>${readinessBySection[sectionInsight.id] || "Não iniciada"}</strong></span>
+                </div>
+                <div class="apostila-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${sectionInsight.progressPct}" aria-label="Progresso da seção ${sectionInsight.titulo}">
+                  <div class="apostila-progress-fill" style="width:${sectionInsight.progressPct}%"></div>
+                </div>
+                <button class="icon-btn" type="button" data-apostila-study-mode="section" data-section-id="${sectionInsight.id}">Estudar esta seção</button>
+              </div>
+            </details>
+          `).join("")}
+        </div>
+      </section>
+
+      <section class="apostila-mode-actions ${studySession && !studySession.finished ? "is-disabled" : ""}" aria-label="Entradas de estudo">
+        <h4 class="apostila-section-cards-title">Ações secundárias</h4>
+        <div class="apostila-shell-grid">
+        <article class="apostila-shell-card">
+          <h4>Revisar itens pendentes</h4>
+          <p>Prioriza baixa familiaridade, erros e revisão em atraso.</p>
+          <button class="primary-icon-btn" type="button" data-apostila-study-mode="pending">Iniciar</button>
+        </article>
+
+        <article class="apostila-shell-card">
+          <h4>Estudar por seção</h4>
+          <p>Escolha a seção oficial para foco direcionado.</p>
+          <div class="apostila-section-focus-row">
+            <span>Foco sugerido:</span>
+            <div class="apostila-focus-list">
+              ${suggestedSections
+                .map(
+                  (sectionInsight) => `
+                    <button class="apostila-focus-pill" type="button" data-apostila-study-mode="section" data-section-id="${sectionInsight.id}">
+                      ${sectionInsight.ordemSecao}. ${sectionInsight.titulo} · ${sectionInsight.weakItems} fraco(s)
+                    </button>
+                  `
+                )
+                .join("")}
+            </div>
+          </div>
+          <div class="apostila-section-inline-actions">
+            <select class="text-input" id="apostila-study-section-select">
+              ${sectionOptions}
+            </select>
+            <button class="icon-btn" type="button" data-apostila-study-mode="section">Iniciar seção</button>
+          </div>
+        </article>
+
+        <article class="apostila-shell-card">
+          <h4>Estudar japonês → movimento</h4>
+          <p>Veja o termo japonês e evoque o movimento.</p>
+          <button class="primary-icon-btn" type="button" data-apostila-study-mode="jp_to_mov">Iniciar</button>
+        </article>
+
+        <article class="apostila-shell-card">
+          <h4>Estudar movimento → japonês</h4>
+          <p>Veja o movimento e evoque o termo em japonês.</p>
+          <button class="primary-icon-btn" type="button" data-apostila-study-mode="mov_to_jp">Iniciar</button>
+        </article>
+        </div>
+      </section>
+
+      ${
+        studySession
+          ? `<p class="apostila-shell-meta"><strong>${restante}</strong> item(ns) restante(s) na sessão.</p>`
+          : ""
+      }
+
+      ${
+        studySession && !studySession.finished && currentItem
+          ? `
+            <article class="apostila-shell-card apostila-study-session-card">
+              <div class="apostila-session-head">
+                <p class="apostila-shell-meta apostila-session-label">${promptTitle}</p>
+                <p class="apostila-shell-meta apostila-session-progress">${sessionPosition}</p>
+              </div>
+              <h4>${promptValue}</h4>
+              <p>${sections.find((section) => section.id === currentItem.secaoId)?.titulo || ""}</p>
+
+              ${
+                studySession.answerRevealed
+                  ? `<div class="apostila-answer-box"><small>Resposta</small><strong>${answerValue}</strong></div>`
+                  : `<div class="apostila-answer-box is-hidden-answer"><small>Resposta</small><strong>Clique em “Ver resposta” para revelar.</strong></div>`
+              }
+
+              <div class="actions-row apostila-session-actions">
+                ${
+                  studySession.answerRevealed
+                    ? `
+                    <button class="primary-icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="correct">Acertei</button>
+                    <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="wrong">Errei</button>
+                    <button class="icon-btn" type="button" data-apostila-study-action="answer" data-apostila-study-result="skipped">Pular</button>
+                  `
+                    : `<button class="primary-icon-btn" type="button" data-apostila-study-action="reveal-answer">Ver resposta</button>`
+                }
+                <button class="icon-btn" type="button" data-apostila-study-action="end-session">Encerrar sessão</button>
+                <button class="icon-btn" type="button" data-apostila-support-open data-item-id="${currentItem.id}" data-apostila-support-context="study">${isStudySupportOpen ? "Ocultar apoio visual" : "Mostrar apoio visual"}</button>
+              </div>
+
+              ${isStudySupportOpen ? renderItemStudySupportPanel(currentItem, { context: "study", lockedCore: !studySession.answerRevealed }) : ""}
+            </article>
+          `
+          : ""
+      }
+
+      ${
+        studySession?.finished
+          ? `
+            <article class="apostila-shell-card apostila-study-summary-card">
+              <h4>Sessão finalizada</h4>
+              <div class="stats-grid apostila-study-summary-grid">
+                <article class="stat-item"><h3>Itens estudados</h3><strong>${completed}</strong></article>
+                <article class="stat-item"><h3>Acertos</h3><strong>${correct}</strong></article>
+                <article class="stat-item"><h3>Erros</h3><strong>${wrong}</strong></article>
+                <article class="stat-item"><h3>Pulados</h3><strong>${skipped}</strong></article>
+                <article class="stat-item"><h3>Taxa de acerto</h3><strong>${accuracy}%</strong></article>
+              </div>
+              <div class="actions-row">
+                <button class="primary-icon-btn" type="button" data-apostila-study-action="restart-session">Estudar novamente</button>
+                ${wrongItemIds.length > 0 ? `<button class="icon-btn" type="button" data-apostila-study-action="restart-wrong-session">Estudar novamente itens errados</button>` : ""}
+                <button class="icon-btn" type="button" data-apostila-study-action="end-session">Voltar aos modos</button>
+              </div>
+              ${studySession.rewardFeedback
+                ? `
+                  <div class="apostila-reward-block">
+                    <p><strong>${studySession.rewardFeedback.title}</strong></p>
+                    <p>${studySession.rewardFeedback.progressText}</p>
+                    <p>${studySession.rewardFeedback.improvedText || ""}</p>
+                    <p>${studySession.rewardFeedback.weakText || ""}</p>
+                    <p>${studySession.rewardFeedback.streakText}</p>
+                    ${studySession.rewardFeedback.badgeEarned ? `<p>Checkpoint desbloqueado: <strong>${studySession.rewardFeedback.badgeEarned}</strong></p>` : ""}
+                    <p>Próximo passo: <strong>${studySession.rewardFeedback.nextAction}</strong></p>
+                    <button
+                      class="icon-btn"
+                      type="button"
+                      data-apostila-guidance-action="${studySession.rewardFeedback.nextActionType || "pending"}"
+                      data-apostila-guidance-section-id="${studySession.rewardFeedback.nextActionSectionId || ""}"
+                    >Continuar com ação ideal</button>
+                  </div>
+                `
+                : ""}
+            </article>
+          `
+          : ""
+      }
+
+      <p class="apostila-shell-footnote">Progresso geral: <strong>${masteredItems}</strong> de <strong>${totalItems}</strong> itens dominados · Itens fracos: <strong>${weakItems}</strong> · Familiaridade média: <strong>${avgFamiliarity}</strong> · Próxima revisão: <strong>${recommendation?.title || "Revisar itens pendentes"}</strong>.</p>
+    </section>
+  `;
+}
+
+function renderApostilaSimuladoMode(dataState, sections, examSession, uiState) {
+  const ultimosResultados = Array.isArray(dataState.apostilaExamSessions) ? dataState.apostilaExamSessions.slice(0, 8) : [];
+  const sectionOptions = sections.map((s) => `<option value="${s.id}">${s.ordemSecao}. ${s.titulo}</option>`).join("");
+
+  const promptStyleLabel = examSession?.promptStyle === "jp_to_mov_when_available"
+    ? "Japonês → movimento (quando houver termo)"
+    : "Movimento → lembrar execução/termo japonês";
+
+  const modeLabel = examSession?.examMode === "full"
+    ? "Simulado completo"
+    : examSession?.examMode === "section"
+      ? "Simulado por seção"
+      : "Simulado";
+
+  const currentItem = examSession?.currentItem ? getApostilaItemById(sections, examSession.currentItem) : null;
+  const totalItems = Number(examSession?.queue?.length || 0);
+  const index = Number(examSession?.currentIndex || 0);
+  const examStats = examSession?.examStats || {};
+  const completed = Number(examStats.completed || 0);
+  const correct = Number(examStats.correct || 0);
+  const wrong = Number(examStats.wrong || 0);
+  const skipped = Number(examStats.skipped || 0);
+  const accuracy = totalItems > 0 ? Math.round((correct / totalItems) * 100) : 0;
+  const currentSectionTitle = currentItem
+    ? sections.find((section) => section.id === currentItem.secaoId)?.titulo || ""
+    : "";
+
+  const promptValue = (() => {
+    if (!currentItem) {
+      return "";
+    }
+    if (examSession?.promptStyle === "jp_to_mov_when_available" && currentItem.japaneseTerm) {
+      return currentItem.japaneseTerm;
+    }
+    return currentItem.portugueseLabel || currentItem.nome;
+  })();
+
+  const answerValue = (() => {
+    if (!currentItem) {
+      return "";
+    }
+    if (examSession?.promptStyle === "jp_to_mov_when_available" && currentItem.japaneseTerm) {
+      return currentItem.portugueseLabel || currentItem.displayName || currentItem.nome;
+    }
+    return currentItem.japaneseTerm
+      ? `${currentItem.portugueseLabel || currentItem.displayName || currentItem.nome} · ${currentItem.japaneseTerm}`
+      : (currentItem.portugueseLabel || currentItem.displayName || currentItem.nome);
+  })();
+  const isExamSupportOpen = Boolean(uiState?.apostilaExamSupportVisible && currentItem && uiState?.apostilaSupportItemId === currentItem.id && uiState?.apostilaSupportContext === "exam");
+
+  return `
+    <section class="apostila-mode-shell" aria-label="Simulado de exame">
+      <header class="apostila-mode-head">
+        <div>
+          <h3 class="section-title">Simulado de exame</h3>
+          <p class="page-subtitle">Treino objetivo de recordação em sequência oficial da apostila.</p>
+        </div>
+      </header>
+
+      <section class="apostila-exam-entry-layout ${examSession && !examSession.finished ? "is-disabled" : ""}">
+        <article class="apostila-shell-card apostila-exam-entry-card">
+          <h4>Simulado por seção</h4>
+          <p>Fila em ordem oficial da seção selecionada.</p>
+          <div class="apostila-section-inline-actions">
+            <select class="text-input" id="apostila-exam-section-select">${sectionOptions}</select>
+            <select class="text-input" id="apostila-exam-prompt-style-section">
+              <option value="mov_to_jp">Movimento → lembrar execução/termo japonês</option>
+              <option value="jp_to_mov_when_available">Japonês → movimento (quando houver termo)</option>
+            </select>
+            <button class="icon-btn" type="button" data-apostila-exam-mode="section">Iniciar simulado por seção</button>
+          </div>
+        </article>
+
+        <article class="apostila-shell-card apostila-exam-entry-card">
+          <h4>Simulado completo</h4>
+          <p>Fila completa em ordem oficial: seção por seção, item por item.</p>
+          <div class="apostila-section-inline-actions">
+            <select class="text-input" id="apostila-exam-prompt-style-full">
+              <option value="mov_to_jp">Movimento → lembrar execução/termo japonês</option>
+              <option value="jp_to_mov_when_available">Japonês → movimento (quando houver termo)</option>
+            </select>
+            <button class="primary-icon-btn" type="button" data-apostila-exam-mode="full">Iniciar simulado completo</button>
+          </div>
+        </article>
+      </section>
+
+      ${
+        examSession && !examSession.finished && currentItem
+          ? `
+            <article class="apostila-shell-card apostila-exam-session-card">
+              <div class="apostila-session-head">
+                <p class="apostila-shell-meta apostila-session-label">${modeLabel}</p>
+                <p class="apostila-shell-meta apostila-session-progress">Item ${Math.min(index + 1, totalItems)} de ${totalItems}</p>
+              </div>
+              <p class="apostila-shell-meta">Seção: <strong>${currentSectionTitle}</strong></p>
+              <p class="apostila-shell-meta">Estilo da pergunta: <strong>${promptStyleLabel}</strong></p>
+
+              <div class="apostila-exam-prompt-box">
+                <small>Pergunta</small>
+                <strong>${promptValue}</strong>
+              </div>
+
+              ${
+                examSession.answerRevealed
+                  ? `<div class="apostila-answer-box"><small>Resposta</small><strong>${answerValue}</strong></div>`
+                  : `<div class="apostila-answer-box is-hidden-answer"><small>Resposta</small><strong>Clique em “Ver resposta”.</strong></div>`
+              }
+
+              <div class="actions-row apostila-session-actions">
+                ${
+                  examSession.answerRevealed
+                    ? `
+                    <button class="primary-icon-btn" type="button" data-apostila-exam-action="answer" data-apostila-exam-result="correct">Acertei</button>
+                    <button class="icon-btn" type="button" data-apostila-exam-action="answer" data-apostila-exam-result="wrong">Errei</button>
+                    <button class="icon-btn" type="button" data-apostila-exam-action="answer" data-apostila-exam-result="skipped">Pular</button>
+                  `
+                    : `<button class="primary-icon-btn" type="button" data-apostila-exam-action="reveal-answer">Ver resposta</button>`
+                }
+                <button class="icon-btn" type="button" data-apostila-exam-action="end-session">Encerrar simulado</button>
+                ${examSession.answerRevealed ? `<button class="icon-btn" type="button" data-apostila-support-open data-item-id="${currentItem.id}" data-apostila-support-context="exam">${isExamSupportOpen ? "Ocultar apoio deste item" : "Ver apoio deste item"}</button>` : ""}
+              </div>
+
+              ${isExamSupportOpen ? renderItemStudySupportPanel(currentItem, { context: "exam", lockedCore: false }) : ""}
+            </article>
+          `
+          : ""
+      }
+
+      ${
+        examSession?.finished
+          ? `
+            <article class="apostila-shell-card apostila-exam-summary-card">
+              <h4>Resultado do simulado</h4>
+              <div class="stats-grid apostila-study-summary-grid">
+                <article class="stat-item"><h3>Total de itens</h3><strong>${totalItems}</strong></article>
+                <article class="stat-item"><h3>Acertos</h3><strong>${correct}</strong></article>
+                <article class="stat-item"><h3>Erros</h3><strong>${wrong}</strong></article>
+                <article class="stat-item"><h3>Pulados</h3><strong>${skipped}</strong></article>
+                <article class="stat-item"><h3>Taxa de acerto</h3><strong>${accuracy}%</strong></article>
+              </div>
+              <div class="actions-row">
+                <button class="primary-icon-btn" type="button" data-apostila-exam-action="restart-session">Refazer simulado</button>
+                ${Array.isArray(examStats.mistakes) && examStats.mistakes.length > 0 ? `<button class="icon-btn" type="button" data-apostila-exam-action="review-mistakes">Revisar itens errados</button>` : ""}
+                <button class="icon-btn" type="button" data-apostila-exam-action="end-session">Voltar aos modos</button>
+              </div>
+              ${examSession.rewardFeedback
+                ? `
+                  <div class="apostila-reward-block">
+                    <p><strong>${examSession.rewardFeedback.title}</strong></p>
+                    <p>${examSession.rewardFeedback.progressText}</p>
+                    <p>${examSession.rewardFeedback.improvedText || ""}</p>
+                    <p>${examSession.rewardFeedback.weakText || ""}</p>
+                    <p>${examSession.rewardFeedback.streakText}</p>
+                    ${examSession.rewardFeedback.badgeEarned ? `<p>Checkpoint desbloqueado: <strong>${examSession.rewardFeedback.badgeEarned}</strong></p>` : ""}
+                    <p>Próximo passo: <strong>${examSession.rewardFeedback.nextAction}</strong></p>
+                    <button
+                      class="icon-btn"
+                      type="button"
+                      data-apostila-guidance-action="${examSession.rewardFeedback.nextActionType || "pending"}"
+                      data-apostila-guidance-section-id="${examSession.rewardFeedback.nextActionSectionId || ""}"
+                    >Continuar com ação ideal</button>
+                  </div>
+                `
+                : ""}
+            </article>
+          `
+          : ""
+      }
+
+      <article class="apostila-shell-card apostila-shell-card-wide apostila-exam-history-card">
+        <h4>Últimos resultados</h4>
+        ${ultimosResultados.length === 0
+          ? "<p class=\"empty-state\">Nenhum resultado registrado ainda.</p>"
+          : `<ul class=\"entity-list apostila-exam-history-list\">${ultimosResultados
+              .map((session) => {
+                const sessionMode = session.mode === "full" ? "Simulado completo" : "Simulado por seção";
+                const sectionName = session.selectedSectionId
+                  ? sections.find((section) => section.id === session.selectedSectionId)?.titulo || "Seção"
+                  : "Apostila completa";
+                return `
+                  <li class="entity-item apostila-exam-history-item">
+                    <p class="apostila-exam-history-head"><strong>${formatDateFromMs(session.finishedAt || session.startedAt)}</strong> · ${sessionMode}</p>
+                    <p class="apostila-exam-history-section">${sectionName}</p>
+                    <p class="apostila-exam-history-metrics">Score: <strong>${Number(session.score || 0)}%</strong> · Acertos/Erros/Pulados: ${Number(session.correct || 0)}/${Number(session.wrong || 0)}/${Number(session.skipped || 0)}</p>
+                    ${Array.isArray(session.mistakes) && session.mistakes.length > 0 ? `<button class="icon-btn" type="button" data-apostila-exam-review-id="${session.id}">Revisar erros</button>` : ""}
+                  </li>
+                `;
+              })
+              .join("")}</ul>`}
+      </article>
+    </section>
+  `;
+}
+
+function renderApostila(dataState, feedback, uiState) {
+  const sections = [...(dataState.apostilaSections || [])].sort((left, right) => (left.ordemSecao || 0) - (right.ordemSecao || 0));
+  const modoApostila = uiState?.apostilaModo || "ler";
+
+  return card(`
+    <h2 class="page-title">Apostila</h2>
+    <p class="page-subtitle">Base oficial para leitura, estudo e simulado, em sequência da apostila.</p>
+    ${formMessage(feedback)}
+
+    <div class="apostila-mode-switch" role="tablist" aria-label="Modos da apostila">
+      <button type="button" class="btn-apostila-mode ${modoApostila === "ler" ? "is-active" : ""}" data-mode="ler" role="tab" aria-selected="${modoApostila === "ler"}">Ler apostila</button>
+      <button type="button" class="btn-apostila-mode ${modoApostila === "estudar" ? "is-active" : ""}" data-mode="estudar" role="tab" aria-selected="${modoApostila === "estudar"}">Estudar a apostila</button>
+      <button type="button" class="btn-apostila-mode ${modoApostila === "simulado" ? "is-active" : ""}" data-mode="simulado" role="tab" aria-selected="${modoApostila === "simulado"}">Simulado de exame</button>
+    </div>
+
+    ${modoApostila === "ler" ? renderApostilaReadingMode(sections, uiState) : ""}
+    ${modoApostila === "estudar" ? renderApostilaEstudoMode(dataState, sections, uiState?.apostilaStudySession || null, uiState) : ""}
+    ${modoApostila === "simulado" ? renderApostilaSimuladoMode(dataState, sections, uiState?.apostilaExamSession || null, uiState) : ""}
   `);
 }
 
@@ -1281,7 +1978,7 @@ export function renderRouteView(route, user, dataState, feedbackByRoute, uiState
   }
 
   if (route === "/apostila") {
-    return renderApostila(dataState, feedbackByRoute.apostila);
+    return renderApostila(dataState, feedbackByRoute.apostila, uiState);
   }
 
   if (route === "/perfil") {
@@ -1661,7 +2358,289 @@ export function mountTecnicasHandlers({ onSaveProgress, onFilterChange }) {
   });
 }
 
-export function mountApostilaHandlers() {
+export function mountApostilaHandlers({
+  modoAtual,
+  onModeChange,
+  onStartStudySession,
+  onRevealStudyAnswer,
+  onAnswerStudySession,
+  onEndStudySession,
+  onRestartStudySession,
+  onRestartWrongStudySession,
+  onStartExamSession,
+  onRevealExamAnswer,
+  onAnswerExamSession,
+  onEndExamSession,
+  onRestartExamSession,
+  onReviewCurrentExamMistakes,
+  onReviewSavedExamMistakes,
+  onRunGuidedAction,
+  onResumeFlow,
+  onOpenItemSupport,
+  onCloseItemSupport,
+  onTrackItemSupportUsage,
+}) {
+  document.querySelectorAll(".btn-apostila-mode").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = String(button.getAttribute("data-mode") || "");
+      if (!mode || typeof onModeChange !== "function" || mode === modoAtual) {
+        return;
+      }
+
+      onModeChange(mode);
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-guidance-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (typeof onRunGuidedAction !== "function") {
+        return;
+      }
+
+      const actionType = String(button.getAttribute("data-apostila-guidance-action") || "");
+      const sectionId = String(button.getAttribute("data-apostila-guidance-section-id") || "");
+      if (!actionType) {
+        return;
+      }
+      onRunGuidedAction({ actionType, sectionId });
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-resume-flow]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (typeof onResumeFlow !== "function") {
+        return;
+      }
+      onResumeFlow();
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-support-open]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (typeof onOpenItemSupport !== "function") {
+        return;
+      }
+      const itemId = String(button.getAttribute("data-item-id") || "");
+      const context = String(button.getAttribute("data-apostila-support-context") || "reading");
+      if (!itemId) {
+        return;
+      }
+      await onOpenItemSupport({ itemId, context });
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-support-close]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (typeof onCloseItemSupport !== "function") {
+        return;
+      }
+      const context = String(button.getAttribute("data-apostila-support-context") || "reading");
+      onCloseItemSupport({ context });
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-support-track]").forEach((segment) => {
+    segment.addEventListener("toggle", async () => {
+      if (!segment.open || typeof onTrackItemSupportUsage !== "function") {
+        return;
+      }
+      const markerType = String(segment.getAttribute("data-apostila-support-track") || "");
+      const itemId = String(segment.getAttribute("data-item-id") || "");
+      if (!markerType || !itemId) {
+        return;
+      }
+      await onTrackItemSupportUsage({ itemId, markerType });
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-support-hint]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (typeof onTrackItemSupportUsage !== "function") {
+        return;
+      }
+      const itemId = String(button.getAttribute("data-item-id") || "");
+      if (!itemId) {
+        return;
+      }
+      await onTrackItemSupportUsage({ itemId, markerType: "hint" });
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-audio-player]").forEach((audio) => {
+    audio.addEventListener("play", async () => {
+      if (typeof onTrackItemSupportUsage !== "function") {
+        return;
+      }
+      const itemId = String(audio.getAttribute("data-item-id") || "");
+      if (!itemId) {
+        return;
+      }
+      await onTrackItemSupportUsage({ itemId, markerType: "audio" });
+    });
+
+    audio.addEventListener("error", () => {
+      const wrap = audio.closest(".apostila-audio-row");
+      if (wrap) {
+        wrap.insertAdjacentHTML("beforeend", '<p class="empty-state">Falha ao carregar áudio de apoio.</p>');
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-media-image]").forEach((img) => {
+    img.addEventListener("error", () => {
+      const frame = img.closest(".apostila-media-image-frame");
+      if (frame) {
+        frame.innerHTML = '<p class="empty-state">Imagem de apoio indisponível no momento.</p>';
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-apostila-media-video]").forEach((video) => {
+    video.addEventListener("error", () => {
+      const frame = video.closest(".apostila-media-video-frame");
+      if (frame) {
+        frame.innerHTML = '<p class="empty-state">Vídeo de apoio indisponível no momento.</p>';
+      }
+    });
+  });
+
+  if (modoAtual === "estudar") {
+    document.querySelectorAll("[data-apostila-study-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (typeof onStartStudySession !== "function") {
+          return;
+        }
+
+        const mode = String(button.getAttribute("data-apostila-study-mode") || "");
+        if (!mode) {
+          return;
+        }
+
+        const sectionSelect = document.querySelector("#apostila-study-section-select");
+        const sectionIdFromCard = String(button.getAttribute("data-section-id") || "");
+        const sectionId = sectionIdFromCard || (sectionSelect ? String(sectionSelect.value || "") : "");
+        onStartStudySession({ mode, sectionId });
+      });
+    });
+
+    document.querySelectorAll("[data-apostila-study-action]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const action = String(button.getAttribute("data-apostila-study-action") || "");
+        if (!action) {
+          return;
+        }
+
+        if (action === "reveal-answer" && typeof onRevealStudyAnswer === "function") {
+          onRevealStudyAnswer();
+          return;
+        }
+
+        if (action === "end-session" && typeof onEndStudySession === "function") {
+          await onEndStudySession();
+          return;
+        }
+
+        if (action === "restart-session" && typeof onRestartStudySession === "function") {
+          onRestartStudySession();
+          return;
+        }
+
+        if (action === "restart-wrong-session" && typeof onRestartWrongStudySession === "function") {
+          onRestartWrongStudySession();
+          return;
+        }
+
+        if (action === "answer" && typeof onAnswerStudySession === "function") {
+          const result = String(button.getAttribute("data-apostila-study-result") || "");
+          if (!result) {
+            return;
+          }
+          await onAnswerStudySession(result);
+        }
+      });
+    });
+
+    return;
+  }
+
+  if (modoAtual === "simulado") {
+    document.querySelectorAll("[data-apostila-exam-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (typeof onStartExamSession !== "function") {
+          return;
+        }
+
+        const mode = String(button.getAttribute("data-apostila-exam-mode") || "");
+        if (!mode) {
+          return;
+        }
+
+        const sectionSelect = document.querySelector("#apostila-exam-section-select");
+        const sectionId = sectionSelect ? String(sectionSelect.value || "") : "";
+        const styleSelectSection = document.querySelector("#apostila-exam-prompt-style-section");
+        const styleSelectFull = document.querySelector("#apostila-exam-prompt-style-full");
+        const promptStyle = mode === "section"
+          ? String(styleSelectSection?.value || "mov_to_jp")
+          : String(styleSelectFull?.value || "mov_to_jp");
+
+        onStartExamSession({ mode, sectionId, promptStyle });
+      });
+    });
+
+    document.querySelectorAll("[data-apostila-exam-action]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const action = String(button.getAttribute("data-apostila-exam-action") || "");
+        if (!action) {
+          return;
+        }
+
+        if (action === "reveal-answer" && typeof onRevealExamAnswer === "function") {
+          onRevealExamAnswer();
+          return;
+        }
+
+        if (action === "end-session" && typeof onEndExamSession === "function") {
+          await onEndExamSession();
+          return;
+        }
+
+        if (action === "restart-session" && typeof onRestartExamSession === "function") {
+          onRestartExamSession();
+          return;
+        }
+
+        if (action === "review-mistakes" && typeof onReviewCurrentExamMistakes === "function") {
+          onReviewCurrentExamMistakes();
+          return;
+        }
+
+        if (action === "answer" && typeof onAnswerExamSession === "function") {
+          const result = String(button.getAttribute("data-apostila-exam-result") || "");
+          if (!result) {
+            return;
+          }
+          await onAnswerExamSession(result);
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-apostila-exam-review-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const sessionId = String(button.getAttribute("data-apostila-exam-review-id") || "");
+        if (!sessionId || typeof onReviewSavedExamMistakes !== "function") {
+          return;
+        }
+        onReviewSavedExamMistakes(sessionId);
+      });
+    });
+
+    return;
+  }
+
+  if (modoAtual !== "ler") {
+    return;
+  }
+
   const navButtons = Array.from(document.querySelectorAll(".btn-apostila-nav"));
   const sections = Array.from(document.querySelectorAll(".apostila-study-section"));
   const mobileSelect = document.querySelector("#apostila-mobile-select");
